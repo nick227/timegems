@@ -1,0 +1,1189 @@
+openapi: 3.1.0
+info:
+  title: TimeGems API
+  version: 0.0.1
+
+servers:
+  - url: http://localhost:3001
+    description: Local dev
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: httpOnly session cookie (web) or Bearer token (native). No active-tenant check.
+    adminAuth:
+      type: http
+      scheme: bearer
+      description: Same session as bearerAuth, plus requires an AdminUser record (site admin).
+
+  responses:
+    Unauthorized:
+      description: Not authenticated
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  parameters:
+    Cursor:
+      in: query
+      name: cursor
+      schema: { type: string }
+      description: Opaque cursor returned by the previous page.
+    Limit:
+      in: query
+      name: limit
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    SearchQuery:
+      in: query
+      name: q
+      schema: { type: string, minLength: 1, maxLength: 200 }
+
+  schemas:
+    PaginatedMeta:
+      type: object
+      required: [hasMore, nextCursor]
+      properties:
+        hasMore: { type: boolean }
+        nextCursor: { type: [string, 'null'] }
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        code: { type: string }
+
+    # ── Identity ──────────────────────────────────────────────────────────
+    User:
+      type: object
+      required: [id, email, name, createdAt]
+      properties:
+        id: { type: string }
+        email: { type: string }
+        name: { type: string }
+        avatarUrl: { type: [string, 'null'] }
+        suspendedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    AuthResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/User' }
+      # Session token delivered via Set-Cookie (httpOnly) -- not in the body.
+
+    GoogleAuthInput:
+      type: object
+      required: [credential]
+      properties:
+        credential:
+          type: string
+          description: Google ID token from the Sign-In button callback
+
+    # ── Tenancy ───────────────────────────────────────────────────────────
+    Tenant:
+      type: object
+      required: [id, name, slug, plan, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        plan: { type: string, enum: [FREE, TEAM, ENTERPRISE] }
+        createdAt: { type: string, format: date-time }
+
+    TenantSummary:
+      allOf:
+        - $ref: '#/components/schemas/Tenant'
+        - type: object
+          required: [role]
+          properties:
+            role: { type: string, enum: [OWNER, ADMIN, MEMBER] }
+
+    CreateTenantInput:
+      type: object
+      required: [name, slug]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        slug: { type: string, minLength: 1, maxLength: 50, pattern: '^[a-z0-9-]+$' }
+
+    Team:
+      type: object
+      required: [id, tenantId, name, createdAt]
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        name: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    CreateTeamInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+
+    UpdateTeamInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+
+    AddTeamMemberInput:
+      type: object
+      required: [userId]
+      properties:
+        userId: { type: string }
+
+    # ── Projects ──────────────────────────────────────────────────────────
+    Project:
+      type: object
+      required: [id, tenantId, name, createdAt]
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        teamId: { type: [string, 'null'] }
+        name: { type: string }
+        color: { type: [string, 'null'] }
+        archivedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    CreateProjectInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        teamId: { type: [string, 'null'] }
+        color: { type: [string, 'null'] }
+
+    UpdateProjectInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        teamId: { type: [string, 'null'] }
+        color: { type: [string, 'null'] }
+        archived: { type: boolean }
+
+    # ── Core work loop ────────────────────────────────────────────────────
+    Note:
+      type: object
+      required: [id, workSessionId, authorId, body, isStopSummary, createdAt]
+      properties:
+        id: { type: string }
+        workSessionId: { type: string }
+        authorId: { type: string }
+        body: { type: string }
+        isStopSummary: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        author: { $ref: '#/components/schemas/User' }
+
+    CreateNoteInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 5000 }
+
+    WorkSessionInterval:
+      type: object
+      required: [id, kind, startedAt]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [ACTIVE, PAUSED] }
+        startedAt: { type: string, format: date-time }
+        endedAt: { type: [string, 'null'], format: date-time }
+
+    WorkSession:
+      type: object
+      required: [id, tenantId, userId, status, startedAt, activeDurationSec, createdAt]
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        userId: { type: string }
+        projectId: { type: [string, 'null'] }
+        status: { type: string, enum: [RUNNING, PAUSED, STOPPED] }
+        startedAt: { type: string, format: date-time }
+        stoppedAt: { type: [string, 'null'], format: date-time }
+        activeDurationSec: { type: integer }
+        createdAt: { type: string, format: date-time }
+        project:
+          oneOf:
+            - $ref: '#/components/schemas/Project'
+            - type: 'null'
+        user: { $ref: '#/components/schemas/User' }
+
+    WorkSessionDetail:
+      allOf:
+        - $ref: '#/components/schemas/WorkSession'
+        - type: object
+          properties:
+            notes:
+              type: array
+              items: { $ref: '#/components/schemas/Note' }
+            intervals:
+              type: array
+              items: { $ref: '#/components/schemas/WorkSessionInterval' }
+
+    StartWorkSessionInput:
+      type: object
+      properties:
+        projectId: { type: [string, 'null'] }
+
+    UpdateWorkSessionInput:
+      type: object
+      properties:
+        projectId: { type: [string, 'null'] }
+
+    StopWorkSessionInput:
+      type: object
+      properties:
+        note: { type: string, maxLength: 5000 }
+
+    # ── Reporting ─────────────────────────────────────────────────────────
+    TimeSummaryEntry:
+      type: object
+      required: [projectId, projectName, durationSec]
+      properties:
+        projectId: { type: [string, 'null'] }
+        projectName: { type: [string, 'null'] }
+        userId: { type: string }
+        durationSec: { type: integer }
+
+    TimeSummary:
+      type: object
+      required: [period, date, scope, totalDurationSec, entries]
+      properties:
+        period: { type: string, enum: [day, month, year] }
+        date: { type: string, format: date }
+        scope: { type: string, enum: [individual, team] }
+        teamId: { type: [string, 'null'] }
+        totalDurationSec: { type: integer }
+        entries:
+          type: array
+          items: { $ref: '#/components/schemas/TimeSummaryEntry' }
+
+    # ── AI agent workforce ────────────────────────────────────────────────
+    AgentReport:
+      type: object
+      required: [id, agentEmployeeId, tenantId, type, title, body, createdAt]
+      properties:
+        id: { type: string }
+        agentEmployeeId: { type: string }
+        tenantId: { type: string }
+        teamId: { type: [string, 'null'] }
+        projectId: { type: [string, 'null'] }
+        type: { type: string, enum: [SUMMARY, REVIEW, PROPOSAL, GOAL] }
+        title: { type: string }
+        body: { type: string }
+        postedTo:
+          type: array
+          items:
+            type: object
+            properties:
+              channel: { type: string, enum: [feed, discord, github, doc] }
+              ref: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+
+    AgentEmployee:
+      type: object
+      required: [id, tenantId, kind, name, enabled, schedule, createdAt]
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        kind: { type: string, enum: [SUMMARIZER, QA, PM, CODE_REVIEW, STEERING, CUSTOM] }
+        name: { type: string }
+        enabled: { type: boolean }
+        schedule: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    # ── Admin ─────────────────────────────────────────────────────────────
+    AdminUpdateTenantInput:
+      type: object
+      properties:
+        plan: { type: string, enum: [FREE, TEAM, ENTERPRISE] }
+        suspended: { type: boolean }
+
+    AdminUpdateUserInput:
+      type: object
+      properties:
+        suspended: { type: boolean }
+
+paths:
+  # ── Auth ────────────────────────────────────────────────────────────────
+  /auth/google:
+    post:
+      operationId: googleAuth
+      security: []
+      tags: [auth]
+      summary: Sign in or register with Google (the only auth method in V1)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GoogleAuthInput' }
+      responses:
+        '200':
+          description: Authenticated -- session token delivered via Set-Cookie (httpOnly)
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400':
+          description: Invalid Google credential
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Logged out -- clears session cookie
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: 'null' }
+
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+
+  # ── Tenants ─────────────────────────────────────────────────────────────
+  /tenants:
+    get:
+      operationId: listMyTenants
+      tags: [tenants]
+      summary: Tenants the current user belongs to
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Tenants
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/TenantSummary' }
+    post:
+      operationId: createTenant
+      tags: [tenants]
+      summary: Create a new tenant; caller becomes OWNER
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTenantInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '201':
+          description: Tenant created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/TenantSummary' }
+
+  /tenants/{tenantId}/select:
+    post:
+      operationId: selectActiveTenant
+      tags: [tenants]
+      summary: Set the active tenant for the current session
+      parameters:
+        - in: path
+          name: tenantId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Active tenant switched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/TenantSummary' }
+
+  # ── Teams ───────────────────────────────────────────────────────────────
+  /teams:
+    get:
+      operationId: listTeams
+      tags: [teams]
+      summary: Teams in the active tenant
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Paginated teams
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Team' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+    post:
+      operationId: createTeam
+      tags: [teams]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTeamInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '201':
+          description: Team created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Team' }
+
+  /teams/{teamId}:
+    get:
+      operationId: getTeam
+      tags: [teams]
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Team
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Team' }
+    patch:
+      operationId: updateTeam
+      tags: [teams]
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTeamInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Team updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Team' }
+
+  /teams/{teamId}/members:
+    get:
+      operationId: listTeamMembers
+      tags: [teams]
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Paginated team members
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/User' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+    post:
+      operationId: addTeamMember
+      tags: [teams]
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddTeamMemberInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '201':
+          description: Member added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+
+  /teams/{teamId}/members/{userId}:
+    delete:
+      operationId: removeTeamMember
+      tags: [teams]
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: 'null' }
+
+  # ── Projects ────────────────────────────────────────────────────────────
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/SearchQuery'
+        - in: query
+          name: teamId
+          schema: { type: string }
+        - in: query
+          name: archived
+          schema: { type: boolean, default: false }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Paginated projects
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Project' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+    post:
+      operationId: createProject
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProjectInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '201':
+          description: Project created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Project' }
+
+  /projects/{projectId}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Project
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Project' }
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProjectInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Project updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Project' }
+
+  # ── Core work loop ─────────────────────────────────────────────────────
+  /work-sessions/active:
+    get:
+      operationId: getActiveWorkSession
+      tags: [workSessions]
+      summary: The current user's running/paused session in the active tenant, if any
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Active work session or null
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    oneOf:
+                      - $ref: '#/components/schemas/WorkSessionDetail'
+                      - type: 'null'
+
+  /work-sessions/start:
+    post:
+      operationId: startWorkSession
+      tags: [workSessions]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StartWorkSessionInput' }
+      responses:
+        '201':
+          description: Work session started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WorkSessionDetail' }
+        '409':
+          description: An active session already exists for this user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /work-sessions/{workSessionId}:
+    get:
+      operationId: getWorkSession
+      tags: [workSessions]
+      parameters:
+        - in: path
+          name: workSessionId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Work session detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WorkSessionDetail' }
+    patch:
+      operationId: updateWorkSession
+      tags: [workSessions]
+      summary: Change the project tagged to an in-progress session
+      parameters:
+        - in: path
+          name: workSessionId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateWorkSessionInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Work session updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WorkSessionDetail' }
+
+  /work-sessions/{workSessionId}/pause:
+    post:
+      operationId: pauseWorkSession
+      tags: [workSessions]
+      parameters:
+        - in: path
+          name: workSessionId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Work session paused
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WorkSessionDetail' }
+
+  /work-sessions/{workSessionId}/resume:
+    post:
+      operationId: resumeWorkSession
+      tags: [workSessions]
+      parameters:
+        - in: path
+          name: workSessionId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Work session resumed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WorkSessionDetail' }
+
+  /work-sessions/{workSessionId}/stop:
+    post:
+      operationId: stopWorkSession
+      tags: [workSessions]
+      summary: Stop and close the session; optionally attach a final note
+      parameters:
+        - in: path
+          name: workSessionId
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StopWorkSessionInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Work session stopped
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WorkSessionDetail' }
+
+  /work-sessions:
+    get:
+      operationId: listWorkSessions
+      tags: [workSessions]
+      summary: Paginated session history, for Views (daily/monthly/yearly) and drill-down
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - in: query
+          name: userId
+          schema: { type: string }
+        - in: query
+          name: projectId
+          schema: { type: string }
+        - in: query
+          name: teamId
+          schema: { type: string }
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Paginated work sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/WorkSession' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+
+  /work-sessions/{workSessionId}/notes:
+    get:
+      operationId: listNotes
+      tags: [notes]
+      parameters:
+        - in: path
+          name: workSessionId
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Paginated notes for a session
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Note' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+    post:
+      operationId: createNote
+      tags: [notes]
+      summary: Add an update note while running/paused
+      parameters:
+        - in: path
+          name: workSessionId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateNoteInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '201':
+          description: Note created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Note' }
+
+  # ── Reporting ───────────────────────────────────────────────────────────
+  /reports/time-summary:
+    get:
+      operationId: getTimeSummary
+      tags: [reports]
+      summary: Daily/monthly/yearly time-by-project rollup, individual or team scope
+      parameters:
+        - in: query
+          name: period
+          required: true
+          schema: { type: string, enum: [day, month, year] }
+        - in: query
+          name: date
+          required: true
+          schema: { type: string, format: date }
+          description: Any date within the target period
+        - in: query
+          name: scope
+          required: true
+          schema: { type: string, enum: [individual, team] }
+        - in: query
+          name: teamId
+          schema: { type: string }
+          description: Required when scope=team
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Time summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/TimeSummary' }
+
+  # ── AI agent workforce ──────────────────────────────────────────────────
+  /agent-reports:
+    get:
+      operationId: listAgentReports
+      tags: [agentReports]
+      summary: In-app feed of agent-generated reports for the active tenant
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - in: query
+          name: teamId
+          schema: { type: string }
+        - in: query
+          name: projectId
+          schema: { type: string }
+        - in: query
+          name: type
+          schema: { type: string, enum: [SUMMARY, REVIEW, PROPOSAL, GOAL] }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Paginated agent reports
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AgentReport' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+
+  /agent-reports/{agentReportId}:
+    get:
+      operationId: getAgentReport
+      tags: [agentReports]
+      parameters:
+        - in: path
+          name: agentReportId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Agent report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/AgentReport' }
+
+  # ── Admin ───────────────────────────────────────────────────────────────
+  /admin/tenants:
+    get:
+      operationId: adminListTenants
+      tags: [admin]
+      security:
+        - adminAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/SearchQuery'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Paginated tenants (platform-wide)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Tenant' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+
+  /admin/tenants/{tenantId}:
+    patch:
+      operationId: adminUpdateTenant
+      tags: [admin]
+      security:
+        - adminAuth: []
+      parameters:
+        - in: path
+          name: tenantId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminUpdateTenantInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Tenant updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Tenant' }
+
+  /admin/users:
+    get:
+      operationId: adminListUsers
+      tags: [admin]
+      security:
+        - adminAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/SearchQuery'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Paginated users (platform-wide)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/User' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+
+  /admin/users/{userId}:
+    patch:
+      operationId: adminUpdateUser
+      tags: [admin]
+      security:
+        - adminAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminUpdateUserInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+
+  /admin/agent-employees:
+    get:
+      operationId: adminListAgentEmployees
+      tags: [admin]
+      security:
+        - adminAuth: []
+      summary: View configured agent employees (Summarizer in V1). Config editing is V2.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Paginated agent employees
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AgentEmployee' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+
+  /admin/agent-employees/{agentEmployeeId}/run:
+    post:
+      operationId: adminRunAgentEmployee
+      tags: [admin]
+      security:
+        - adminAuth: []
+      summary: Manually trigger a run now, outside its schedule
+      parameters:
+        - in: path
+          name: agentEmployeeId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '201':
+          description: Run triggered; returns the produced report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/AgentReport' }

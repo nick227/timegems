@@ -1,0 +1,9 @@
+extends:
+  - recommended
+
+rules:
+  # Internal API: operationId + tag + path are sufficient documentation;
+  # requiring a human summary on every trivial CRUD op is noise, not signal.
+  operation-summary: off
+  info-license: off
+  no-server-example.com: off

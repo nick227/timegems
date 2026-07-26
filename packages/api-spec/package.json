@@ -1,0 +1,11 @@
+{
+  "name": "@timegems/api-spec",
+  "version": "0.0.1",
+  "main": "./openapi.yaml",
+  "scripts": {
+    "lint": "redocly lint openapi.yaml --config ../../.redocly.yaml"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^1.0.0"
+  }
+}

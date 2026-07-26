@@ -1,0 +1,392 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Identity ────────────────────────────────────────────────────────────────
+
+model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  name        String
+  avatarUrl   String?
+  googleId    String    @unique
+  suspendedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  memberships     Membership[]
+  teamMemberships TeamMembership[]
+  workSessions    WorkSession[]
+  notes           Note[]
+  sessions        Session[]
+  adminUser       AdminUser?
+}
+
+model Session {
+  id             String   @id @default(cuid())
+  userId         String
+  token          String   @unique
+  activeTenantId String? // which tenant this session is currently scoped to
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  user         User    @relation(fields: [userId], references: [id])
+  activeTenant Tenant? @relation(fields: [activeTenantId], references: [id])
+
+  @@index([token])
+  @@index([userId])
+}
+
+model AdminUser {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  role      AdminRole
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+enum AdminRole {
+  SUPERADMIN
+  SUPPORT
+}
+
+// ── Tenancy ─────────────────────────────────────────────────────────────────
+
+model Tenant {
+  id        String     @id @default(cuid())
+  name      String
+  slug      String     @unique
+  plan      TenantPlan @default(FREE)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  memberships     Membership[]
+  teams           Team[]
+  projects        Project[]
+  workSessions    WorkSession[]
+  agentEmployees  AgentEmployee[]
+  agentReports    AgentReport[]
+  goals           Goal[]
+  integrations    Integration[]
+  googleDocLinks  GoogleDocLink[]
+  discordBindings DiscordBinding[]
+  githubBindings  GithubBinding[]
+  activeSessions  Session[]
+}
+
+enum TenantPlan {
+  FREE
+  TEAM
+  ENTERPRISE
+}
+
+model Membership {
+  id        String         @id @default(cuid())
+  userId    String
+  tenantId  String
+  role      MembershipRole
+  createdAt DateTime       @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([userId, tenantId])
+  @@index([tenantId])
+  @@index([userId])
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant       Tenant           @relation(fields: [tenantId], references: [id])
+  members      TeamMembership[]
+  projects     Project[]
+  agentReports AgentReport[]
+  goals        Goal[]
+
+  @@index([tenantId])
+}
+
+model TeamMembership {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+}
+
+// ── Core work loop ──────────────────────────────────────────────────────────
+
+model Project {
+  id         String    @id @default(cuid())
+  tenantId   String
+  teamId     String?
+  name       String
+  color      String?
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id])
+  team           Team?           @relation(fields: [teamId], references: [id])
+  workSessions   WorkSession[]
+  agentReports   AgentReport[]
+  googleDocLinks GoogleDocLink[]
+  githubBindings GithubBinding[]
+
+  @@index([tenantId])
+  @@index([teamId])
+}
+
+model WorkSession {
+  id                String            @id @default(cuid())
+  tenantId          String
+  userId            String
+  projectId         String?
+  status            WorkSessionStatus @default(RUNNING)
+  startedAt         DateTime          @default(now())
+  stoppedAt         DateTime?
+  activeDurationSec Int               @default(0)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  tenant         Tenant                @relation(fields: [tenantId], references: [id])
+  user           User                  @relation(fields: [userId], references: [id])
+  project        Project?              @relation(fields: [projectId], references: [id])
+  intervals      WorkSessionInterval[]
+  notes          Note[]
+  googleDocLinks GoogleDocLink[]
+
+  // Invariant enforced in WorkSessionService, not the DB: at most one
+  // non-STOPPED WorkSession per userId (MySQL has no partial unique index).
+  @@index([tenantId])
+  @@index([userId, status])
+  @@index([userId, startedAt])
+  @@index([projectId])
+}
+
+enum WorkSessionStatus {
+  RUNNING
+  PAUSED
+  STOPPED
+}
+
+// Append-only active/paused boundary log a WorkSession's duration is derived
+// from — duration is never trusted from the client clock.
+model WorkSessionInterval {
+  id            String       @id @default(cuid())
+  workSessionId String
+  kind          IntervalKind
+  startedAt     DateTime     @default(now())
+  endedAt       DateTime?
+  createdAt     DateTime     @default(now())
+
+  workSession WorkSession @relation(fields: [workSessionId], references: [id])
+
+  @@index([workSessionId])
+}
+
+enum IntervalKind {
+  ACTIVE
+  PAUSED
+}
+
+model Note {
+  id            String   @id @default(cuid())
+  workSessionId String
+  authorId      String
+  body          String   @db.Text
+  isStopSummary Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workSession WorkSession @relation(fields: [workSessionId], references: [id])
+  author      User        @relation(fields: [authorId], references: [id])
+
+  @@index([workSessionId, createdAt])
+  @@index([authorId])
+}
+
+// ── AI agent workforce ──────────────────────────────────────────────────────
+
+model AgentEmployee {
+  id        String            @id @default(cuid())
+  tenantId  String
+  kind      AgentEmployeeKind
+  name      String
+  enabled   Boolean           @default(true)
+  schedule  String
+  config    Json    @default("{}")
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  tenant  Tenant        @relation(fields: [tenantId], references: [id])
+  reports AgentReport[]
+
+  @@index([tenantId])
+}
+
+enum AgentEmployeeKind {
+  SUMMARIZER
+  QA
+  PM
+  CODE_REVIEW
+  STEERING
+  CUSTOM
+}
+
+model AgentReport {
+  id              String          @id @default(cuid())
+  agentEmployeeId String
+  tenantId        String
+  teamId          String?
+  projectId       String?
+  type            AgentReportType
+  title           String
+  body            String          @db.Text
+  postedTo        Json
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  agentEmployee AgentEmployee @relation(fields: [agentEmployeeId], references: [id])
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  team          Team?         @relation(fields: [teamId], references: [id])
+  project       Project?      @relation(fields: [projectId], references: [id])
+  goals         Goal[]
+
+  @@index([tenantId, createdAt])
+  @@index([agentEmployeeId])
+  @@index([teamId])
+  @@index([projectId])
+}
+
+enum AgentReportType {
+  SUMMARY
+  REVIEW
+  PROPOSAL
+  GOAL
+}
+
+model Goal {
+  id                  String     @id @default(cuid())
+  tenantId            String
+  teamId              String?
+  title               String
+  description         String     @db.Text
+  status              GoalStatus @default(PROPOSED)
+  sourceAgentReportId String?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  tenant            Tenant       @relation(fields: [tenantId], references: [id])
+  team              Team?        @relation(fields: [teamId], references: [id])
+  sourceAgentReport AgentReport? @relation(fields: [sourceAgentReportId], references: [id])
+
+  @@index([tenantId, status])
+}
+
+enum GoalStatus {
+  PROPOSED
+  ACTIVE
+  DONE
+  DROPPED
+}
+
+// ── Integrations ─────────────────────────────────────────────────────────────
+
+model Integration {
+  id          String            @id @default(cuid())
+  tenantId    String
+  kind        IntegrationKind
+  status      IntegrationStatus @default(DISCONNECTED)
+  credentials Json?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, kind])
+}
+
+enum IntegrationKind {
+  GOOGLE
+  DISCORD
+  GITHUB
+}
+
+enum IntegrationStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+}
+
+model GoogleDocLink {
+  id            String    @id @default(cuid())
+  tenantId      String
+  workSessionId String?
+  projectId     String?
+  docId         String
+  docUrl        String
+  syncedAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  workSession WorkSession? @relation(fields: [workSessionId], references: [id])
+  project     Project?     @relation(fields: [projectId], references: [id])
+
+  @@index([tenantId])
+}
+
+model DiscordBinding {
+  id        String   @id @default(cuid())
+  tenantId  String
+  guildId   String
+  channelId String
+  postTypes Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model GithubBinding {
+  id              String   @id @default(cuid())
+  tenantId        String
+  installationId  String
+  repoFullName    String
+  linkedProjectId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  linkedProject Project? @relation(fields: [linkedProjectId], references: [id])
+
+  @@index([tenantId])
+}

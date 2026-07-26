@@ -1,0 +1,23 @@
+{
+  "name": "@timegems/sdk",
+  "version": "0.0.1",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "generate": "tsx scripts/generate.ts"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.0.0",
+    "openapi-fetch": "^0.12.0"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.0.0",
+    "tsx": "^4.0.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0"
+  }
+}
