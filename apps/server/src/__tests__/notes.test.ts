@@ -27,6 +27,22 @@ describe('listNotes', () => {
     await validateResponse('listNotes', 200, res.json())
     expect(res.json().data.length).toBe(1)
   })
+
+  it('lets a teammate list notes on a shared session', async () => {
+    const session = await db.workSession.create({
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Shared session', status: 'RUNNING' },
+    })
+    await db.note.create({ data: { workSessionId: session.id, authorId: testUserId, body: 'Live update' } })
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/work-sessions/${session.id}/notes`,
+      headers: asAuth(testOtherUserId),
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.length).toBe(1)
+  })
 })
 
 describe('createNote', () => {

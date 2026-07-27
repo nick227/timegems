@@ -204,6 +204,47 @@ describe('getWorkSession', () => {
     await validateResponse('getWorkSession', 200, res.json())
     expect(res.json().data.intervals.length).toBe(1)
   })
+
+  it('lets a teammate read a shared session without owning it', async () => {
+    const session = await db.workSession.create({
+      data: {
+        tenantId: testTenantId,
+        userId: testUserId,
+        name: 'Shared session',
+        status: 'RUNNING',
+        intervals: { create: [{ kind: 'ACTIVE' }] },
+      },
+    })
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/work-sessions/${session.id}`,
+      headers: asAuth(testOtherUserId),
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.userId).toBe(testUserId)
+  })
+
+  it('404s for a session in a tenant the caller does not belong to', async () => {
+    const foreignTenant = await db.tenant.create({ data: { name: 'Foreign Co', slug: 'foreign-co-shared-session' } })
+    const session = await db.workSession.create({
+      data: {
+        tenantId: foreignTenant.id,
+        userId: testUserId,
+        name: 'Foreign session',
+        status: 'RUNNING',
+      },
+    })
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/work-sessions/${session.id}`,
+      headers: asAuth(testOtherUserId),
+    })
+
+    expect(res.statusCode).toBe(404)
+  })
 })
 
 describe('updateWorkSession', () => {

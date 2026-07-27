@@ -17,8 +17,7 @@ export async function startWorkSession(request: any, reply: any) {
 }
 
 export async function getWorkSession(request: any, reply: any) {
-  const tenantId = requireTenantId(request)
-  const session = await workSessionService.get(tenantId, request.params.workSessionId)
+  const session = await workSessionService.get(request.user.id, request.params.workSessionId)
   return reply.send({ data: session })
 }
 

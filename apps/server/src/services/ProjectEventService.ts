@@ -2,6 +2,7 @@ import { db, type Prisma } from '@timegems/db'
 import type { ProjectEvent, ProjectEventSource, ProjectUpdate, User } from '@prisma/client'
 import { decodeCursor, normalizeLimit } from '../lib/pagination'
 import { HttpError } from '../lib/errors'
+import { requireReadableProject } from '../lib/workSessionAccess'
 import {
   type ProjectEventPayload,
   type ProjectFeedItem,
@@ -119,11 +120,12 @@ export class ProjectEventService {
   }
 
   async listFeed(
-    tenantId: string,
+    userId: string,
     projectId: string,
     opts: { cursor?: string; limit?: number },
   ) {
-    await this.requireProject(tenantId, projectId)
+    const project = await requireReadableProject(userId, projectId)
+    const tenantId = project.tenantId
     const limit = normalizeLimit(opts.limit)
     const cursor = decodeCursor(opts.cursor)
     const fetchSize = limit + 1
@@ -172,8 +174,9 @@ export class ProjectEventService {
     }
   }
 
-  async getUpdate(tenantId: string, projectId: string, updateId: string) {
-    await this.requireProject(tenantId, projectId)
+  async getUpdate(userId: string, projectId: string, updateId: string) {
+    const project = await requireReadableProject(userId, projectId)
+    const tenantId = project.tenantId
     const update = await db.projectUpdate.findFirst({
       where: { id: updateId, tenantId, projectId },
     })
@@ -183,11 +186,6 @@ export class ProjectEventService {
 
   broadcastFeedItem(tenantId: string, projectId: string, item: ProjectFeedItem) {
     broadcastProjectActivity(tenantId, projectId, item)
-  }
-
-  private async requireProject(tenantId: string, projectId: string) {
-    const project = await db.project.findFirst({ where: { id: projectId, tenantId }, select: { id: true } })
-    if (!project) throw new HttpError(404, 'Project not found')
   }
 
   eventToFeedItem(

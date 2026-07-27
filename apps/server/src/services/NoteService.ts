@@ -1,6 +1,7 @@
 import { db } from '@timegems/db'
 import { cursorOrderBy, cursorWhere, decodeCursor, normalizeLimit, paginate } from '../lib/pagination'
 import { HttpError } from '../lib/errors'
+import { requireReadableWorkSession } from '../lib/workSessionAccess'
 import { sanitizeRichText } from '../lib/sanitizeHtml'
 import { broadcastProjectNote } from '../presence'
 import { ProjectEventService } from './ProjectEventService'
@@ -8,9 +9,8 @@ import { ProjectEventService } from './ProjectEventService'
 const projectEventService = new ProjectEventService()
 
 export class NoteService {
-  async list(tenantId: string, workSessionId: string, opts: { cursor?: string; limit?: number }) {
-    const session = await db.workSession.findFirst({ where: { id: workSessionId, tenantId } })
-    if (!session) throw new HttpError(404, 'Work session not found')
+  async list(userId: string, workSessionId: string, opts: { cursor?: string; limit?: number }) {
+    await requireReadableWorkSession(userId, workSessionId)
 
     const limit = normalizeLimit(opts.limit)
     const cursor = decodeCursor(opts.cursor)

@@ -5,8 +5,7 @@ import { hasCapability } from '../lib/authorization'
 const noteService = new NoteService()
 
 export async function listNotes(request: any, reply: any) {
-  const tenantId = requireTenantId(request)
-  const result = await noteService.list(tenantId, request.params.workSessionId, request.query)
+  const result = await noteService.list(request.user.id, request.params.workSessionId, request.query)
   return reply.send(result)
 }
 

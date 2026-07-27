@@ -19,6 +19,7 @@ import {
 import { PageSpinner } from '@/components/ui/Spinner'
 import { stripHtml } from '@/lib/stripHtml'
 import { useWorkTimer } from './hooks/useWorkTimer'
+import { useSessionWorkspace } from './hooks/useSessionWorkspace'
 import { useAuthorization } from '@/lib/Authorization'
 import { QueryErrorState } from '@/components/ui/QueryErrorState'
 import { Button } from '@/components/ui/Button'
@@ -40,6 +41,9 @@ export function WorkSessionRoute() {
   const { data: meData } = useCurrentUser()
   const currentUserId = meData?.data.user.id
   const session = sessionQuery.data?.data ?? null
+  const activeTenantId = meData?.data.tenant?.id
+
+  useSessionWorkspace(session, activeTenantId)
 
   const pauseMutation = usePauseWorkSession()
   const resumeMutation = useResumeWorkSession()
@@ -190,6 +194,7 @@ export function WorkSessionRoute() {
         <Suspense fallback={<PageSpinner />}>
         {supportingDataWarning}
         <WorkReview
+        sessionName={session.name}
         elapsedSeconds={elapsedSeconds}
         projectName={session.project?.name}
         gemType={gemType}
@@ -232,6 +237,7 @@ export function WorkSessionRoute() {
       {supportingDataWarning}
       <WorkActive
       workSessionId={session.id}
+      sessionName={session.name}
       isPaused={session.status === 'PAUSED'}
       elapsedSeconds={elapsedSeconds}
       startedAt={session.startedAt}

@@ -3,6 +3,7 @@ import { cursorOrderBy, cursorWhere, decodeCursor, normalizeLimit, paginate } fr
 import { GemService } from './GemService'
 import { AgentEmployeeService } from './AgentEmployeeService'
 import { HttpError } from '../lib/errors'
+import { requireWorkSessionTenantAccess } from '../lib/workSessionAccess'
 import { sanitizeRichText } from '../lib/sanitizeHtml'
 import { generateSessionName } from '../lib/sessionName'
 
@@ -381,9 +382,10 @@ export class WorkSessionService {
     )
   }
 
-  async get(tenantId: string, workSessionId: string) {
-    const session = await db.workSession.findFirst({ where: { id: workSessionId, tenantId }, include: detailInclude })
+  async get(userId: string, workSessionId: string) {
+    const session = await db.workSession.findFirst({ where: { id: workSessionId }, include: detailInclude })
     if (!session) throw new HttpError(404, 'Work session not found')
+    await requireWorkSessionTenantAccess(userId, session.tenantId)
     return toDetail(session)
   }
 
