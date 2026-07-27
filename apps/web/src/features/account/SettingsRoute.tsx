@@ -16,7 +16,10 @@ export function SettingsRoute() {
   const logout = useLogout()
   const navigate = useNavigate()
   const [confirmingLogout, setConfirmingLogout] = useState(false)
-  const workspaceCount = tenantsQuery.data?.data.length ?? 0
+  // Solo personal (or any single) workspace has nothing to switch between —
+  // showing it just looks like a joinable org. Only surface the section once
+  // the user actually belongs to more than one tenant.
+  const showWorkspaces = (tenantsQuery.data?.data.length ?? 0) > 1
 
   async function handleLogout() {
     try {
@@ -39,12 +42,12 @@ export function SettingsRoute() {
         <GemBank />
       </div>
 
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-muted-foreground">
-          {workspaceCount === 1 ? 'Workspace' : 'Workspaces'}
-        </p>
-        <TenantSwitcher />
-      </div>
+      {showWorkspaces && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-muted-foreground">Workspaces</p>
+          <TenantSwitcher />
+        </div>
+      )}
 
       <Button
         variant="outline"
