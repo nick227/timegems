@@ -17,7 +17,7 @@ export function ReportRoute() {
         error={reportQuery.error}
         resource="Agent report"
         onRetry={() => void reportQuery.refetch()}
-        returnTo="/reports"
+        returnTo="/settings?tab=reports"
         returnLabel="Return to Agent Reports"
       />
     )
@@ -30,7 +30,7 @@ export function ReportRoute() {
         error={new ApiError(404, 'Agent report not found')}
         resource="Agent report"
         onRetry={() => void reportQuery.refetch()}
-        returnTo="/reports"
+        returnTo="/settings?tab=reports"
         returnLabel="Return to Agent Reports"
       />
     )

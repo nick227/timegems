@@ -1,5 +1,5 @@
-import { useState, type KeyboardEvent } from 'react'
-import { PageHeader } from '@/components/ui/PageHeader'
+import { useState } from 'react'
+import { useTabs } from '@/components/ui/hooks/useTabs'
 import { cn } from '@/lib/utils'
 import { AgentEmployeeList } from '@/features/agent-employees'
 import { TenantsTab } from './components/TenantsTab'
@@ -13,42 +13,20 @@ const TABS: { value: Tab; label: string }[] = [
   { value: 'agents', label: 'Agent Employees' },
 ]
 
-// This is a real ARIA tabs widget (switches which panel is rendered below),
-// not a single-choice radiogroup like ProjectPicker/GoalPicker/ViewsRoute's
-// pickers -- tabs and radiogroups look identical as pill buttons but are
-// different widgets (role="tab"+aria-selected+aria-controls vs.
-// role="radio"+aria-checked), so this doesn't reuse useRovingRadioGroup.
-// Hand-rolled rather than a shared `useTabs` hook since this is currently
-// the only tab strip in the app -- revisit if a second one shows up.
+// No own page wrapper/heading -- this is now a panel inside the combined
+// Settings page's "Admin" tab (see features/account/SettingsRoute.tsx),
+// which owns the single h1 for the whole page.
 export function AdminRoute() {
   const [tab, setTab] = useState<Tab>('tenants')
-
-  function onKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
-    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
-    e.preventDefault()
-    const currentIndex = TABS.findIndex((t) => t.value === tab)
-    const delta = e.key === 'ArrowRight' ? 1 : -1
-    const nextIndex = (currentIndex + delta + TABS.length) % TABS.length
-    const next = TABS[nextIndex]!
-    setTab(next.value)
-    ;(e.currentTarget.parentElement?.querySelector(`#admin-tab-${next.value}`) as HTMLElement | null)?.focus()
-  }
+  const { tablistProps, getTabProps, getPanelProps } = useTabs('admin', TABS, tab, setTab)
 
   return (
-    <div className="max-w-xl mx-auto px-4 py-6 space-y-4">
-      <PageHeader title="Admin" />
-
-      <div role="tablist" aria-label="Admin sections" className="flex gap-1 rounded-lg bg-surface p-1 w-fit">
+    <div className="space-y-4">
+      <div {...tablistProps} aria-label="Admin sections" className="flex gap-1 rounded-lg bg-surface p-1 w-fit">
         {TABS.map((t) => (
           <button
             key={t.value}
-            id={`admin-tab-${t.value}`}
-            role="tab"
-            aria-selected={tab === t.value}
-            aria-controls={`admin-tabpanel-${t.value}`}
-            tabIndex={tab === t.value ? 0 : -1}
-            onClick={() => setTab(t.value)}
-            onKeyDown={onKeyDown}
+            {...getTabProps(t.value)}
             className={cn(
               'px-3 py-1.5 rounded text-sm font-medium transition-colors',
               tab === t.value ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground',
@@ -59,7 +37,7 @@ export function AdminRoute() {
         ))}
       </div>
 
-      <div id={`admin-tabpanel-${tab}`} role="tabpanel" aria-labelledby={`admin-tab-${tab}`}>
+      <div {...getPanelProps(tab)}>
         {tab === 'tenants' && <TenantsTab />}
         {tab === 'users' && <UsersTab />}
         {tab === 'agents' && <AgentEmployeeList />}

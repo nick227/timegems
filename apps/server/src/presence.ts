@@ -13,15 +13,28 @@ import { db } from '@timegems/db'
 // exception to the "everything goes through the spec" rule.
 
 type Status = 'online' | 'working' | 'paused'
+type SessionStatus = 'working' | 'paused'
+
+// A user can have several concurrent sessions now (one per project -- see
+// UserActiveSession), so presence is keyed per-session, not a single
+// status/projectId per user. `sessions` is a live snapshot of every session
+// the client last reported; the derived top-level status/projectId/etc. on
+// the wire (see `serialize`) exist only so existing single-value UI (the
+// Team page's PresenceIndicator, the avatar-strip PresenceStrip) keeps
+// working without caring which of several sessions is "the" one.
+interface SessionPresence {
+  workSessionId: string
+  projectId: string | null
+  projectName: string | null
+  status: SessionStatus
+  sessionStartedAt: string
+}
 
 interface PresenceState {
   userId: string
   name: string
   avatarUrl: string | null
-  status: Status
-  projectId: string | null
-  projectName: string | null
-  sessionStartedAt: string | null
+  sessions: Map<string, SessionPresence> // keyed by workSessionId
   lastHeartbeat: number
   sockets: Set<any>
 }
@@ -29,14 +42,29 @@ interface PresenceState {
 const STALE_MS = 45_000 // ~3 missed 15s heartbeats before we call it offline
 const SWEEP_INTERVAL_MS = 10_000
 const MAX_MESSAGE_BYTES = 4 * 1024
-const VALID_STATUSES = new Set<Status>(['online', 'working', 'paused'])
+const VALID_SESSION_STATUSES = new Set<SessionStatus>(['working', 'paused'])
 
 // tenantId -> userId -> state
 const tenantPresence = new Map<string, Map<string, PresenceState>>()
 
+// A running session wins over a paused one when picking the single
+// "primary" session for the derived top-level fields -- same rule the
+// frontend stopgaps use elsewhere until per-session UI (project rooms,
+// floating indicators) fully replaces single-value displays.
 function serialize(state: PresenceState) {
-  const { sockets, ...rest } = state
-  return rest
+  const sessions = [...state.sessions.values()]
+  const primary = sessions.find((s) => s.status === 'working') ?? sessions[0] ?? null
+  return {
+    userId: state.userId,
+    name: state.name,
+    avatarUrl: state.avatarUrl,
+    status: (primary?.status ?? 'online') as Status,
+    projectId: primary?.projectId ?? null,
+    projectName: primary?.projectName ?? null,
+    sessionStartedAt: primary?.sessionStartedAt ?? null,
+    lastHeartbeat: state.lastHeartbeat,
+    sessions,
+  }
 }
 
 function broadcast(tenantId: string) {
@@ -47,6 +75,63 @@ function broadcast(tenantId: string) {
     for (const socket of state.sockets) {
       if (socket.readyState === socket.OPEN) socket.send(payload)
     }
+  }
+}
+
+export interface ProjectNoteActivity {
+  workSessionId: string
+  note: {
+    id: string
+    body: string
+    createdAt: string
+    updatedAt: string
+    author: { id: string; name: string; avatarUrl: string | null }
+  }
+}
+
+export interface ProjectActivityMessage {
+  type: 'project-activity'
+  projectId: string
+  item: import('./lib/projectActivity').ProjectFeedItem
+}
+
+function usersInProjectRoom(usersMap: Map<string, PresenceState>, projectId: string) {
+  const sockets: any[] = []
+  for (const state of usersMap.values()) {
+    const inRoom = [...state.sessions.values()].some((s) => s.projectId === projectId)
+    if (!inRoom) continue
+    for (const socket of state.sockets) {
+      if (socket.readyState === socket.OPEN) sockets.push(socket)
+    }
+  }
+  return sockets
+}
+
+export function broadcastProjectActivity(
+  tenantId: string,
+  projectId: string,
+  item: import('./lib/projectActivity').ProjectFeedItem,
+) {
+  const usersMap = tenantPresence.get(tenantId)
+  if (!usersMap) return
+  const message = JSON.stringify({ type: 'project-activity', projectId, item } satisfies ProjectActivityMessage)
+  for (const socket of usersInProjectRoom(usersMap, projectId)) {
+    socket.send(message)
+  }
+}
+
+// A project with several users each running their own concurrent session on
+// it is a "room" -- this is the live half of that: pushed to everyone whose
+// presence currently reports a session on this project (the author's own
+// other tabs included), over the same socket presence already uses rather
+// than standing up a second connection. Reuses `tenantPresence` purely as a
+// read -- it never mutates presence state itself.
+export function broadcastProjectNote(tenantId: string, projectId: string, activity: ProjectNoteActivity) {
+  const usersMap = tenantPresence.get(tenantId)
+  if (!usersMap) return
+  const message = JSON.stringify({ type: 'project-note', projectId, ...activity })
+  for (const socket of usersInProjectRoom(usersMap, projectId)) {
+    socket.send(message)
   }
 }
 
@@ -156,10 +241,7 @@ async function authenticateAndJoin(socket: any, request: any) {
       userId: user.id,
       name: user.name,
       avatarUrl: user.avatarUrl,
-      status: 'online',
-      projectId: null,
-      projectName: null,
-      sessionStartedAt: null,
+      sessions: new Map(),
       lastHeartbeat: Date.now(),
       sockets: new Set(),
     }
@@ -170,30 +252,36 @@ async function authenticateAndJoin(socket: any, request: any) {
   broadcast(tenantId)
 
   const handleMessage = (raw: Buffer) => {
-    let msg: { status?: unknown; projectId?: unknown; sessionStartedAt?: unknown }
+    let msg: { sessions?: unknown }
     try {
       msg = JSON.parse(raw.toString())
     } catch {
       return
     }
-    if (!msg || typeof msg !== 'object') return
-    if (msg.status !== undefined && !VALID_STATUSES.has(msg.status as Status)) return
-    if (msg.projectId !== undefined && msg.projectId !== null && typeof msg.projectId !== 'string') return
-    if (
-      msg.sessionStartedAt !== undefined &&
-      msg.sessionStartedAt !== null &&
-      (typeof msg.sessionStartedAt !== 'string' || Number.isNaN(Date.parse(msg.sessionStartedAt)))
-    ) {
-      return
+    if (!msg || typeof msg !== 'object' || !Array.isArray(msg.sessions)) return
+
+    const parsed: SessionPresence[] = []
+    for (const item of msg.sessions) {
+      if (!item || typeof item !== 'object') return
+      const { workSessionId, projectId, status, sessionStartedAt } = item as Record<string, unknown>
+      if (typeof workSessionId !== 'string') return
+      if (!VALID_SESSION_STATUSES.has(status as SessionStatus)) return
+      if (projectId !== null && typeof projectId !== 'string') return
+      if (typeof sessionStartedAt !== 'string' || Number.isNaN(Date.parse(sessionStartedAt))) return
+      parsed.push({
+        workSessionId,
+        projectId: (projectId as string | null) ?? null,
+        projectName: null,
+        status: status as SessionStatus,
+        sessionStartedAt,
+      })
     }
 
     const current = usersMap!.get(user.id)
     if (!current) return
 
-    current.status = (msg.status as Status | undefined) ?? current.status
-    current.projectId = (msg.projectId as string | null | undefined) ?? null
-    current.sessionStartedAt = (msg.sessionStartedAt as string | null | undefined) ?? null
     current.lastHeartbeat = Date.now()
+    current.sessions = new Map(parsed.map((s) => [s.workSessionId, s]))
 
     void (async () => {
       const stillMember = await db.membership.findUnique({
@@ -208,15 +296,25 @@ async function authenticateAndJoin(socket: any, request: any) {
         return
       }
 
-      if (current.projectId) {
-        const project = await db.project.findFirst({
-          where: { id: current.projectId, tenantId },
-          select: { name: true },
+      const projectIds = [...new Set(parsed.map((s) => s.projectId).filter((id): id is string => id !== null))]
+      if (projectIds.length > 0) {
+        const projects = await db.project.findMany({
+          where: { id: { in: projectIds }, tenantId },
+          select: { id: true, name: true },
         })
-        if (!project) current.projectId = null
-        current.projectName = project?.name ?? null
-      } else {
-        current.projectName = null
+        const nameById = new Map(projects.map((p) => [p.id, p.name]))
+        for (const s of current.sessions.values()) {
+          if (s.projectId) {
+            const name = nameById.get(s.projectId)
+            if (name === undefined) {
+              // Project no longer exists (or isn't in this tenant) -- drop
+              // the stale reference rather than show a dangling projectId.
+              s.projectId = null
+            } else {
+              s.projectName = name
+            }
+          }
+        }
       }
       broadcast(tenantId)
     })().catch(() => {

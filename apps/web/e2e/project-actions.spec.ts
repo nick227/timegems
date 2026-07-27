@@ -8,9 +8,9 @@ async function finishActiveSession(page: import('@playwright/test').Page) {
 }
 
 test('starts project-tagged work from the project list and recovers it after the page closes', async ({ page, context }) => {
-  await page.goto('/projects')
+  await page.goto('/settings?tab=projects')
   await page.getByRole('button', { name: 'Start work on E2E Project' }).click()
-  await expect(page).toHaveURL(/\/$/)
+  await expect(page).toHaveURL(/\/work\//)
   await expect(page.getByText('Working', { exact: true })).toBeVisible()
   await expect(page.getByRole('radio', { name: 'E2E Project' })).toHaveAttribute('aria-checked', 'true')
 
@@ -29,14 +29,14 @@ test('starts project-tagged work from the project list and recovers it after the
   await expect(recoveredPage.getByRole('button', { name: 'Start work on E2E Project' })).toHaveCount(0)
 
   await recoveredPage.getByRole('button', { name: 'Stop working' }).click()
-  await expect(recoveredPage).toHaveURL(/\/$/)
+  await expect(recoveredPage).toHaveURL(/\/work\//)
   await expect(recoveredPage.getByText('Session summary')).toBeVisible()
   await recoveredPage.getByRole('button', { name: 'Finish session' }).click()
   await expect(recoveredPage.getByRole('button', { name: 'Start Work' })).toBeVisible()
 
   await recoveredPage.goto('/projects/e2e-project')
   await recoveredPage.getByRole('button', { name: 'Start work on E2E Project' }).click()
-  await expect(recoveredPage).toHaveURL(/\/$/)
+  await expect(recoveredPage).toHaveURL(/\/work\//)
   await expect(recoveredPage.getByText('Working', { exact: true })).toBeVisible()
   await finishActiveSession(recoveredPage)
 })

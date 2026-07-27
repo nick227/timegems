@@ -9,57 +9,44 @@ type ActiveSession = components['schemas']['WorkSessionDetail']
 interface StartProjectWorkButtonProps {
   projectId: string
   projectName: string
-  activeSession?: ActiveSession | null
-  activeSessionLoading?: boolean
-  showOtherActiveSession?: boolean
+  // The user's full set of concurrently active sessions (one per project at
+  // most -- see UserActiveSession). Only a session matching THIS project
+  // blocks starting a new one; sessions on other projects don't, since
+  // concurrent sessions across projects are allowed.
+  sessions?: ActiveSession[]
+  sessionsLoading?: boolean
   size?: 'sm' | 'md' | 'lg'
 }
 
 export function StartProjectWorkButton({
   projectId,
   projectName,
-  activeSession,
-  activeSessionLoading = false,
-  showOtherActiveSession = false,
+  sessions = [],
+  sessionsLoading = false,
   size = 'md',
 }: StartProjectWorkButtonProps) {
   const navigate = useNavigate()
   const startSession = useStartWorkSession()
-  const isThisProject = activeSession?.projectId === projectId
+  const thisSession = sessions.find((s) => s.projectId === projectId)
 
-  if (isThisProject) {
+  if (thisSession) {
     const label =
-      activeSession.status === 'RUNNING'
+      thisSession.status === 'RUNNING'
         ? 'Working'
-        : activeSession.status === 'PAUSED'
+        : thisSession.status === 'PAUSED'
           ? 'Paused'
           : 'Review session'
-    const Icon = activeSession.status === 'RUNNING' ? Clock3 : CirclePause
+    const Icon = thisSession.status === 'RUNNING' ? Clock3 : CirclePause
 
     return (
       <Button
         size={size}
-        variant={activeSession.status === 'RUNNING' ? 'default' : 'outline'}
+        variant={thisSession.status === 'RUNNING' ? 'default' : 'outline'}
         aria-label={`${label} on ${projectName}. Return to Work`}
-        onClick={() => navigate('/')}
+        onClick={() => navigate(`/work/${thisSession.id}`)}
       >
         <Icon size={15} />
         {label}
-      </Button>
-    )
-  }
-
-  if (activeSession && showOtherActiveSession) {
-    const activeProjectName = activeSession.project?.name
-    return (
-      <Button
-        size={size}
-        variant="outline"
-        aria-label={activeProjectName ? `Return to active work on ${activeProjectName}` : 'Return to active work session'}
-        onClick={() => navigate('/')}
-      >
-        <Clock3 size={15} />
-        {activeProjectName ? `Working on ${activeProjectName}` : 'Return to active session'}
       </Button>
     )
   }
@@ -71,7 +58,12 @@ export function StartProjectWorkButton({
       navigate('/')
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
-        toast.info('Returning to your active session')
+        toast.info('Returning to your active session on this project')
+        // `/` redirects to whichever active session is newest, which is
+        // this one unless a stale cache raced with another tab/session AND
+        // a different session was started even more recently elsewhere --
+        // a narrow edge case not worth a direct react-query lookup here
+        // just to resolve this project's exact session id.
         navigate('/')
       }
       // Other failures are handled by the global mutation error toast.
@@ -82,8 +74,7 @@ export function StartProjectWorkButton({
     <Button
       size={size}
       loading={startSession.isPending}
-      disabled={activeSessionLoading || Boolean(activeSession)}
-      title={activeSession ? 'Finish your active session before starting another project.' : undefined}
+      disabled={sessionsLoading}
       aria-label={`Start work on ${projectName}`}
       onClick={() => void handleStart()}
     >

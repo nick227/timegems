@@ -14,18 +14,20 @@ function computeActiveSeconds(intervals: WorkSessionInterval[], now: number) {
 }
 
 /**
- * Ticks once a second while `active` is true and returns the live elapsed
- * ACTIVE-interval seconds for a work session. Stops ticking (freezing the
- * last computed value) once `active` goes false, e.g. entering stop-review.
+ * Refreshes the elapsed estimate every five minutes while `active` is true.
+ * Interval boundaries still cause an immediate authoritative recompute when
+ * work starts, pauses, resumes, or enters review.
  */
 export function useWorkTimer(intervals: WorkSessionInterval[] | undefined, active: boolean) {
   const [nowTick, setNowTick] = useState(() => Date.now())
+  const activeIntervalId = intervals?.find((interval) => interval.kind === 'ACTIVE' && !interval.endedAt)?.id
 
   useEffect(() => {
     if (!active) return
-    const id = setInterval(() => setNowTick(Date.now()), 1000)
+    setNowTick(Date.now())
+    const id = setInterval(() => setNowTick(Date.now()), 5 * 60 * 1000)
     return () => clearInterval(id)
-  }, [active])
+  }, [active, activeIntervalId])
 
   return computeActiveSeconds(intervals ?? [], nowTick)
 }

@@ -13,7 +13,7 @@ describe('getActiveWorkSession', () => {
     expect(res.statusCode).toBe(401)
   })
 
-  it('returns null when nothing is running', async () => {
+  it('returns an empty list when nothing is running', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/work-sessions/active',
@@ -21,7 +21,21 @@ describe('getActiveWorkSession', () => {
     })
     expect(res.statusCode).toBe(200)
     await validateResponse('getActiveWorkSession', 200, res.json())
-    expect(res.json().data).toBeNull()
+    expect(res.json().data).toEqual([])
+  })
+
+  it('lists multiple concurrent sessions, one per project', async () => {
+    const projectA = await db.project.create({ data: { tenantId: testTenantId, name: 'Project A' } })
+    const projectB = await db.project.create({ data: { tenantId: testTenantId, name: 'Project B' } })
+    await app.inject({ method: 'POST', url: '/work-sessions/start', headers: asAuth(testUserId), payload: { projectId: projectA.id } })
+    await app.inject({ method: 'POST', url: '/work-sessions/start', headers: asAuth(testUserId), payload: { projectId: projectB.id } })
+
+    const res = await app.inject({ method: 'GET', url: '/work-sessions/active', headers: asAuth(testUserId) })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toHaveLength(2)
+    expect(res.json().data.every((s: any) => typeof s.name === 'string' && s.name.length > 0)).toBe(true)
+    const projectIds = res.json().data.map((s: any) => s.projectId).sort()
+    expect(projectIds).toEqual([projectA.id, projectB.id].sort())
   })
 })
 
@@ -45,12 +59,16 @@ describe('startWorkSession', () => {
     expect(await db.userActiveSession.count({ where: { userId: testUserId } })).toBe(1)
   })
 
-  it('409s if a session is already active', async () => {
+  it('409s starting a second unassigned session while one is already active', async () => {
     const active = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'RUNNING' },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'RUNNING' },
     })
+    // '__unassigned__' matches WorkSessionService's UNASSIGNED_PROJECT_GUARD
+    // sentinel -- a real null here wouldn't collide with it (MySQL treats
+    // every NULL in a unique index as distinct), so this wouldn't actually
+    // simulate "an unassigned session is already active" without it.
     await db.userActiveSession.create({
-      data: { userId: testUserId, workSessionId: active.id },
+      data: { userId: testUserId, projectId: '__unassigned__', workSessionId: active.id },
     })
     const res = await app.inject({
       method: 'POST',
@@ -59,6 +77,45 @@ describe('startWorkSession', () => {
       payload: {},
     })
     expect(res.statusCode).toBe(409)
+  })
+
+  it('does not 409 starting a session on a different project than an already-active one', async () => {
+    const projectA = await db.project.create({ data: { tenantId: testTenantId, name: 'Project A' } })
+    const projectB = await db.project.create({ data: { tenantId: testTenantId, name: 'Project B' } })
+    const first = await app.inject({
+      method: 'POST',
+      url: '/work-sessions/start',
+      headers: asAuth(testUserId),
+      payload: { projectId: projectA.id },
+    })
+    expect(first.statusCode).toBe(201)
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/work-sessions/start',
+      headers: asAuth(testUserId),
+      payload: { projectId: projectB.id },
+    })
+    expect(second.statusCode).toBe(201)
+  })
+
+  it('409s starting a second session on the same project as an already-active one', async () => {
+    const project = await db.project.create({ data: { tenantId: testTenantId, name: 'Project A' } })
+    const first = await app.inject({
+      method: 'POST',
+      url: '/work-sessions/start',
+      headers: asAuth(testUserId),
+      payload: { projectId: project.id },
+    })
+    expect(first.statusCode).toBe(201)
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/work-sessions/start',
+      headers: asAuth(testUserId),
+      payload: { projectId: project.id },
+    })
+    expect(second.statusCode).toBe(409)
   })
 
   it('allows exactly one of two concurrent starts to commit', async () => {
@@ -130,7 +187,7 @@ describe('getWorkSession', () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         status: 'RUNNING',
         intervals: { create: [{ kind: 'ACTIVE' }] },
       },
@@ -160,7 +217,7 @@ describe('updateWorkSession', () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         status: 'RUNNING',
         intervals: { create: [{ kind: 'ACTIVE' }] },
       },
@@ -178,7 +235,7 @@ describe('updateWorkSession', () => {
 
   it('cannot update another user\'s session', async () => {
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testOtherUserId, status: 'RUNNING' },
+      data: { tenantId: testTenantId, userId: testOtherUserId, name: 'Test session', status: 'RUNNING' },
     })
     const res = await app.inject({
       method: 'PATCH',
@@ -192,7 +249,7 @@ describe('updateWorkSession', () => {
   it('moves a stopped session to another project and marks it corrected', async () => {
     const project = await db.project.create({ data: { tenantId: testTenantId, name: 'New Project' } })
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'STOPPED', stoppedAt: new Date() },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'STOPPED', stoppedAt: new Date() },
     })
     const res = await app.inject({
       method: 'PATCH',
@@ -212,7 +269,7 @@ describe('updateWorkSession', () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         projectId: project.id,
         status: 'STOPPED',
         stoppedAt: new Date(),
@@ -239,7 +296,7 @@ describe('updateWorkSession', () => {
 
   it('cannot correct duration on a running session', async () => {
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'RUNNING' },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'RUNNING' },
     })
     const res = await app.inject({
       method: 'PATCH',
@@ -256,7 +313,7 @@ describe('updateWorkSession', () => {
       data: { tenantId: testTenantId, projectId: project.id, title: 'Ship redesign', description: 'd', status: 'ACTIVE' },
     })
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, projectId: project.id, status: 'RUNNING' },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', projectId: project.id, status: 'RUNNING' },
     })
     const res = await app.inject({
       method: 'PATCH',
@@ -275,7 +332,7 @@ describe('updateWorkSession', () => {
       data: { tenantId: testTenantId, projectId: otherProject.id, title: 'Ship mobile', description: 'd', status: 'ACTIVE' },
     })
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, projectId: project.id, status: 'RUNNING' },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', projectId: project.id, status: 'RUNNING' },
     })
     const res = await app.inject({
       method: 'PATCH',
@@ -291,7 +348,7 @@ describe('updateWorkSession', () => {
       data: { tenantId: testTenantId, title: 'Ship redesign', description: 'd', status: 'ACTIVE' },
     })
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'STOPPED', stoppedAt: new Date() },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'STOPPED', stoppedAt: new Date() },
     })
     const res = await app.inject({
       method: 'PATCH',
@@ -306,7 +363,7 @@ describe('updateWorkSession', () => {
 
   it('allows a session manager to correct another member’s stopped session', async () => {
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testOtherUserId, status: 'STOPPED', stoppedAt: new Date() },
+      data: { tenantId: testTenantId, userId: testOtherUserId, name: 'Test session', status: 'STOPPED', stoppedAt: new Date() },
     })
     const res = await app.inject({
       method: 'PATCH',
@@ -320,7 +377,7 @@ describe('updateWorkSession', () => {
 
   it('does not let a member correct another user’s stopped session', async () => {
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'STOPPED', stoppedAt: new Date() },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'STOPPED', stoppedAt: new Date() },
     })
     const res = await app.inject({
       method: 'PATCH',
@@ -342,7 +399,7 @@ describe('pauseWorkSession', () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         status: 'RUNNING',
         intervals: { create: [{ kind: 'ACTIVE' }] },
       },
@@ -362,7 +419,7 @@ describe('pauseWorkSession', () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         status: 'RUNNING',
         intervals: { create: [{ kind: 'ACTIVE' }] },
       },
@@ -393,7 +450,7 @@ describe('resumeWorkSession', () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         status: 'PAUSED',
         intervals: { create: [{ kind: 'ACTIVE', endedAt: new Date() }, { kind: 'PAUSED' }] },
       },
@@ -413,7 +470,7 @@ describe('resumeWorkSession', () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         status: 'REVIEWING',
         intervals: { create: [{ kind: 'ACTIVE', endedAt: new Date() }] },
       },
@@ -440,7 +497,7 @@ describe('reviewWorkSession', () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         status: 'RUNNING',
         intervals: { create: [{ kind: 'ACTIVE', startedAt: new Date(Date.now() - 1_000) }] },
       },
@@ -466,14 +523,15 @@ describe('reviewWorkSession', () => {
       url: '/work-sessions/active',
       headers: asAuth(testUserId),
     })
-    expect(active.json().data.status).toBe('REVIEWING')
+    expect(active.json().data).toHaveLength(1)
+    expect(active.json().data[0].status).toBe('REVIEWING')
   })
 
   it('enters review from a paused session and closes the pause interval', async () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         status: 'PAUSED',
         intervals: { create: [{ kind: 'ACTIVE', endedAt: new Date() }, { kind: 'PAUSED' }] },
       },
@@ -493,7 +551,7 @@ describe('reviewWorkSession', () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         status: 'RUNNING',
         intervals: { create: [{ kind: 'ACTIVE' }] },
       },
@@ -521,7 +579,7 @@ describe('stopWorkSession', () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         status: 'REVIEWING',
         intervals: { create: [{ kind: 'ACTIVE', startedAt: new Date(Date.now() - 1_000), endedAt: new Date() }] },
       },
@@ -546,7 +604,7 @@ describe('stopWorkSession', () => {
 
   it('409s if already stopped', async () => {
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'STOPPED', stoppedAt: new Date() },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'STOPPED', stoppedAt: new Date() },
     })
     const res = await app.inject({
       method: 'POST',
@@ -561,7 +619,7 @@ describe('stopWorkSession', () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         status: 'RUNNING',
         intervals: { create: [{ kind: 'ACTIVE' }] },
       },
@@ -580,7 +638,7 @@ describe('stopWorkSession', () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         status: 'REVIEWING',
         intervals: { create: [{ kind: 'ACTIVE', endedAt: new Date() }] },
       },
@@ -617,7 +675,7 @@ describe('stopWorkSession', () => {
     await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         projectId: project.id,
         status: 'STOPPED',
         stoppedAt: new Date(),
@@ -631,7 +689,7 @@ describe('stopWorkSession', () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         projectId: project.id,
         status: 'REVIEWING',
         intervals: { create: [{ kind: 'ACTIVE', startedAt: new Date(Date.now() - 1200 * 1000), endedAt: new Date() }] },
@@ -655,7 +713,7 @@ describe('stopWorkSession', () => {
       data: { tenantId: testTenantId, kind: 'SUMMARIZER', name: 'Summarizer', schedule: 'on_change' },
     })
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'REVIEWING', intervals: { create: [{ kind: 'ACTIVE', endedAt: new Date() }] } },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'REVIEWING', intervals: { create: [{ kind: 'ACTIVE', endedAt: new Date() }] } },
     })
     const res = await app.inject({
       method: 'POST',
@@ -686,7 +744,7 @@ describe('listWorkSessions', () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         status: 'STOPPED',
         stoppedAt: new Date(),
         notes: { create: { authorId: testUserId, body: '<p>Finished the review</p>' } },
@@ -712,9 +770,9 @@ describe('listWorkSessions', () => {
     const to = new Date('2026-07-02T05:00:00.000Z')
     await db.workSession.createMany({
       data: [
-        { tenantId: testTenantId, userId: testUserId, status: 'STOPPED', startedAt: from },
-        { tenantId: testTenantId, userId: testUserId, status: 'RUNNING', startedAt: new Date('2026-07-01T12:00:00.000Z') },
-        { tenantId: testTenantId, userId: testUserId, status: 'STOPPED', startedAt: to },
+        { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'STOPPED', startedAt: from },
+        { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'RUNNING', startedAt: new Date('2026-07-01T12:00:00.000Z') },
+        { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'STOPPED', startedAt: to },
       ],
     })
 
@@ -738,7 +796,7 @@ describe('deleteWorkSession', () => {
 
   it('DELETE /work-sessions/{workSessionId}', async () => {
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'STOPPED', stoppedAt: new Date() },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'STOPPED', stoppedAt: new Date() },
     })
     const res = await app.inject({
       method: 'DELETE',
@@ -752,7 +810,7 @@ describe('deleteWorkSession', () => {
 
   it('409s on a session that is still running', async () => {
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'RUNNING' },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'RUNNING' },
     })
     const res = await app.inject({
       method: 'DELETE',
@@ -764,7 +822,7 @@ describe('deleteWorkSession', () => {
 
   it('allows a session manager to delete another member’s stopped session', async () => {
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testOtherUserId, status: 'STOPPED', stoppedAt: new Date() },
+      data: { tenantId: testTenantId, userId: testOtherUserId, name: 'Test session', status: 'STOPPED', stoppedAt: new Date() },
     })
     const res = await app.inject({
       method: 'DELETE',
@@ -777,7 +835,7 @@ describe('deleteWorkSession', () => {
 
   it('does not let a member delete another user’s stopped session', async () => {
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'STOPPED', stoppedAt: new Date() },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'STOPPED', stoppedAt: new Date() },
     })
     const res = await app.inject({
       method: 'DELETE',
@@ -792,10 +850,10 @@ describe('deleteWorkSession', () => {
       data: { tenantId: testTenantId, name: 'Gem Project', gemType: { create: { name: 'Ruby', icon: 'gem', color: '#f00' } } },
     })
     const keep = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, projectId: project.id, status: 'STOPPED', stoppedAt: new Date(), activeDurationSec: 1800 },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', projectId: project.id, status: 'STOPPED', stoppedAt: new Date(), activeDurationSec: 1800 },
     })
     const toDelete = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, projectId: project.id, status: 'STOPPED', stoppedAt: new Date(), activeDurationSec: 1800 },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', projectId: project.id, status: 'STOPPED', stoppedAt: new Date(), activeDurationSec: 1800 },
     })
     // Recompute both into the ledger first (as if each had been stopped via the API)
     const { GemService } = await import('../services/GemService')

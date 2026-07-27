@@ -11,3 +11,6 @@ export * from './goals'
 export * from './agentReports'
 export * from './admin'
 export * from './textAssist'
+export * from './projectActivity'
+export * from './github'
+

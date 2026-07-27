@@ -305,6 +305,40 @@ export interface paths {
         patch: operations["updateProject"];
         trace?: never;
     };
+    "/projects/{projectId}/feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Chronological project activity feed (human notes, GitHub events, AI updates) */
+        get: operations["listProjectFeed"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/updates/{updateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one persisted AI project update with evidence metadata */
+        get: operations["getProjectUpdate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/work-sessions/active": {
         parameters: {
             query?: never;
@@ -312,7 +346,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The current user's running/paused session in the active tenant, if any */
+        /** The current user's active (non-STOPPED) sessions in the active tenant -- a list, since a user can run one concurrent session per project */
         get: operations["getActiveWorkSession"];
         put?: never;
         post?: never;
@@ -707,6 +741,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/integrations/github/installations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List registered GitHub installations for the current tenant */
+        get: operations["listGithubInstallations"];
+        put?: never;
+        /** Register a new GitHub installation or update/reuse an existing one */
+        post: operations["registerGithubInstallation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/github/installations/{installationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Disconnect a GitHub installation */
+        delete: operations["disconnectGithubInstallation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/github/installations/{installationId}/repositories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List repositories authorized for an installation */
+        get: operations["listGithubInstallationRepositories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/github/bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List GitHub repository bindings for a project */
+        get: operations["listProjectGithubBindings"];
+        put?: never;
+        /** Bind a GitHub repository to a project */
+        post: operations["bindProjectGithubRepository"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/github/bindings/{bindingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unbind a GitHub repository from a project */
+        delete: operations["unbindProjectGithubRepository"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/github": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive GitHub webhook payloads */
+        post: operations["handleGithubWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -870,6 +1008,57 @@ export interface components {
             archived?: boolean;
             gemType?: components["schemas"]["UpdateGemTypeInput"];
         };
+        /** @enum {string} */
+        ProjectFeedProvenance: "human" | "github" | "ai" | "system";
+        ProjectFeedLink: {
+            label: string;
+            url: string;
+        };
+        ProjectFeedEvidence: {
+            commits?: {
+                sha: string;
+                message: string;
+                url?: string | null;
+            }[];
+            filesChanged?: string[];
+            pullRequest?: {
+                number: number;
+                title: string;
+                url: string;
+                state?: string | null;
+            };
+            checkRun?: {
+                name: string;
+                conclusion: string | null;
+                url?: string | null;
+            };
+            limitations?: string[];
+            links: components["schemas"]["ProjectFeedLink"][];
+        };
+        ProjectFeedActor: {
+            id: string;
+            name: string;
+            avatarUrl: string | null;
+        };
+        ProjectFeedItem: {
+            id: string;
+            projectId: string;
+            provenance: components["schemas"]["ProjectFeedProvenance"];
+            kind: string;
+            title: string | null;
+            body: string | null;
+            /** Format: date-time */
+            occurredAt: string;
+            actor: components["schemas"]["ProjectFeedActor"] | null;
+            workSessionId?: string | null;
+            noteId?: string | null;
+            sourceEventIds?: string[];
+            confidence?: number;
+            modelName?: string;
+            modelVersion?: string | null;
+            evidence?: components["schemas"]["ProjectFeedEvidence"];
+            links?: components["schemas"]["ProjectFeedLink"][];
+        };
         Note: {
             id: string;
             workSessionId: string;
@@ -902,6 +1091,8 @@ export interface components {
             userId: string;
             projectId?: string | null;
             goalId?: string | null;
+            /** @description Auto-generated at creation (e.g. "Quiet Focus 12") -- identifies this session in the floating indicator, project room, and history when no project name says it better. */
+            name: string;
             status: components["schemas"]["WorkSessionStatus"];
             /** Format: date-time */
             startedAt: string;
@@ -1055,6 +1246,64 @@ export interface components {
         };
         AdminUpdateUserInput: {
             suspended?: boolean;
+        };
+        GithubInstallation: {
+            id: string;
+            tenantId: string;
+            installationId: string;
+            accountName: string;
+            accountAvatarUrl?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        GithubBinding: {
+            id: string;
+            tenantId: string;
+            installationId: string;
+            repoId: string;
+            repoFullName: string;
+            linkedProjectId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        GithubRepository: {
+            id: string;
+            name: string;
+            fullName: string;
+            private: boolean;
+            htmlUrl: string;
+        };
+        /** @enum {string} */
+        ProjectEventSource: "HUMAN" | "GITHUB" | "SYSTEM" | "AI";
+        ProjectEvent: {
+            id: string;
+            tenantId: string;
+            projectId: string;
+            source: components["schemas"]["ProjectEventSource"];
+            /** @description Provider-neutral event kind (e.g. NOTE_CREATED, GITHUB_PUSH, PROJECT_UPDATE) */
+            kind: string;
+            /** @description Idempotency key within (projectId, source). GitHub uses github:{deliveryId}:{event}:{entityId}:{action} */
+            externalId: string;
+            title?: string | null;
+            body?: string | null;
+            payload: Record<string, never>;
+            actorUserId?: string | null;
+            /** Format: date-time */
+            occurredAt: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        RegisterGithubInstallationInput: {
+            installationId: string;
+        };
+        BindGithubRepoInput: {
+            installationId: string;
+            repoId: string;
+            repoFullName: string;
         };
     };
     responses: {
@@ -1842,6 +2091,80 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    listProjectFeed: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor returned by the previous page. */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated project feed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ProjectFeedItem"][];
+                        meta: components["schemas"]["PaginatedMeta"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Project not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getProjectUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                updateId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Project update */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ProjectFeedItem"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Project or update not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     getActiveWorkSession: {
         parameters: {
             query?: never;
@@ -1851,14 +2174,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Active work session or null */
+            /** @description Active work sessions (possibly empty) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        data?: components["schemas"]["WorkSessionDetail"] | null;
+                        data: components["schemas"]["WorkSessionDetail"][];
                     };
                 };
             };
@@ -2640,6 +2963,208 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    listGithubInstallations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of installations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GithubInstallation"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    registerGithubInstallation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterGithubInstallationInput"];
+            };
+        };
+        responses: {
+            /** @description Installation registered */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["GithubInstallation"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    disconnectGithubInstallation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                installationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Installation disconnected */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listGithubInstallationRepositories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                installationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of authorized repositories */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GithubRepository"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listProjectGithubBindings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of bindings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GithubBinding"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    bindProjectGithubRepository: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BindGithubRepoInput"];
+            };
+        };
+        responses: {
+            /** @description Repository bound */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["GithubBinding"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    unbindProjectGithubRepository: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                bindingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Repository unbound */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    handleGithubWebhook: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-github-delivery": string;
+                "x-github-event": string;
+                "x-hub-signature-256": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Webhook processed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status?: string;
+                    };
+                };
+            };
         };
     };
 }

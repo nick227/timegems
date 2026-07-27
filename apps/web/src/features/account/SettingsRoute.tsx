@@ -1,75 +1,86 @@
-import { useState } from 'react'
-import { useLogout, useMyTenants } from '@timegems/sdk'
-import { useNavigate } from 'react-router-dom'
-import { Button } from '@/components/ui/Button'
+import { lazy, Suspense, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { GemBank } from '@/features/gems'
-import { TenantSwitcher } from './components/TenantSwitcher'
-import { ClaimAccountCard } from './components/ClaimAccountCard'
-import { ProfileCard } from './components/ProfileCard'
+import { PageSpinner } from '@/components/ui/Spinner'
+import { useTabs } from '@/components/ui/hooks/useTabs'
 import { useAuthorization } from '@/lib/Authorization'
+import { cn } from '@/lib/utils'
+import { AccountTab } from './components/AccountTab'
 
+const ViewsRoute = lazy(() => import('@/features/views').then((m) => ({ default: m.ViewsRoute })))
+const ProjectsRoute = lazy(() => import('@/features/projects').then((m) => ({ default: m.ProjectsRoute })))
+const TeamsRoute = lazy(() => import('@/features/teams').then((m) => ({ default: m.TeamsRoute })))
+const ReportsRoute = lazy(() => import('@/features/reports').then((m) => ({ default: m.ReportsRoute })))
+const AdminRoute = lazy(() => import('@/features/admin').then((m) => ({ default: m.AdminRoute })))
+
+type Tab = 'account' | 'activity' | 'projects' | 'teams' | 'reports' | 'admin'
+
+const BASE_TABS: { value: Tab; label: string }[] = [
+  { value: 'account', label: 'Account' },
+  { value: 'activity', label: 'Activity' },
+  { value: 'projects', label: 'Projects' },
+  { value: 'teams', label: 'Teams' },
+  { value: 'reports', label: 'Agent Reports' },
+]
+
+function isTab(value: string | null, tabs: readonly { value: Tab }[]): value is Tab {
+  return tabs.some((t) => t.value === value)
+}
+
+// Everything that used to be its own drawer-nav destination (Projects,
+// Teams, Agent Reports, the standalone Activity page) now lives here as a
+// tab, alongside what Settings already had (account, gem bank, logout) --
+// one page instead of six, now that there's no drawer to hold six separate
+// links. `?tab=` (not just component state) so a detail page's "Return to
+// Projects"/"Return to Teams" link (see QueryErrorState call sites) lands
+// on the right panel, not just the default one.
 export function SettingsRoute() {
-  const { user } = useAuthorization()
-  const tenantsQuery = useMyTenants()
-  const logout = useLogout()
-  const navigate = useNavigate()
-  const [confirmingLogout, setConfirmingLogout] = useState(false)
-  // Solo personal (or any single) workspace has nothing to switch between —
-  // showing it just looks like a joinable org. Only surface the section once
-  // the user actually belongs to more than one tenant.
-  const showWorkspaces = (tenantsQuery.data?.data.length ?? 0) > 1
+  const { can } = useAuthorization()
+  const tabs = can('site:admin') ? [...BASE_TABS, { value: 'admin' as const, label: 'Admin' }] : BASE_TABS
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requested = searchParams.get('tab')
+  const [tab, setTabState] = useState<Tab>(isTab(requested, tabs) ? requested : 'account')
 
-  async function handleLogout() {
-    try {
-      await logout.mutateAsync()
-    } finally {
-      navigate('/login', { replace: true })
-    }
+  function setTab(next: Tab) {
+    setTabState(next)
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev)
+      params.set('tab', next)
+      return params
+    })
   }
 
+  const { tablistProps, getTabProps, getPanelProps } = useTabs('settings', tabs, tab, setTab)
+
   return (
-    <div className="max-w-xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
       <PageHeader title="Settings" />
 
-      <ProfileCard />
-
-      {user.isAnonymous && <ClaimAccountCard />}
-
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-muted-foreground">Gem Bank</p>
-        <GemBank />
+      <div {...tablistProps} aria-label="Settings sections" className="flex gap-1 rounded-lg bg-surface p-1 w-full justify-between">
+        {tabs.map((t) => (
+          <button
+            key={t.value}
+            {...getTabProps(t.value)}
+            className={cn(
+              'px-3 py-1.5 rounded text-sm font-medium transition-colors',
+              tab === t.value ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {showWorkspaces && (
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-muted-foreground">Workspaces</p>
-          <TenantSwitcher />
-        </div>
-      )}
-
-      <Button
-        variant="outline"
-        className="w-full"
-        onClick={() => (user.isAnonymous ? setConfirmingLogout(true) : void handleLogout())}
-      >
-        Log out
-      </Button>
-
-      {/* Only guests need the warning -- a real account's data lives on the
-          server regardless of this browser's cookies, so logging out has no
-          data-loss consequence for them. */}
-      <ConfirmDialog
-        open={confirmingLogout}
-        onOpenChange={setConfirmingLogout}
-        title="Log out of this guest account?"
-        description="This account only exists in this browser. Once you log out, there's no way back into it unless you saved it above."
-        confirmLabel="Log out anyway"
-        destructive
-        loading={logout.isPending}
-        onConfirm={handleLogout}
-      />
+      <div {...getPanelProps(tab)}>
+        <Suspense fallback={<PageSpinner />}>
+          {tab === 'account' && <AccountTab />}
+          {tab === 'activity' && <ViewsRoute />}
+          {tab === 'projects' && <ProjectsRoute />}
+          {tab === 'teams' && <TeamsRoute />}
+          {tab === 'reports' && <ReportsRoute />}
+          {tab === 'admin' && can('site:admin') && <AdminRoute />}
+        </Suspense>
+      </div>
     </div>
   )
 }

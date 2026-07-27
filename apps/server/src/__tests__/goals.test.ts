@@ -52,7 +52,7 @@ describe('listGoals', () => {
     await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         projectId: project.id,
         goalId: goal.id,
         status: 'STOPPED',
@@ -61,7 +61,7 @@ describe('listGoals', () => {
     })
     // A RUNNING session tagged with the same goal shouldn't count yet.
     await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, projectId: project.id, goalId: goal.id, status: 'RUNNING', activeDurationSec: 0 },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', projectId: project.id, goalId: goal.id, status: 'RUNNING', activeDurationSec: 0 },
     })
 
     const res = await app.inject({ method: 'GET', url: '/goals', headers: asAuth(testUserId) })

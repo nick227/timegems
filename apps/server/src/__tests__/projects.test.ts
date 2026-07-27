@@ -133,7 +133,7 @@ describe('updateProject', () => {
     await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         projectId: project.id,
         status: 'STOPPED',
         stoppedAt: new Date(),

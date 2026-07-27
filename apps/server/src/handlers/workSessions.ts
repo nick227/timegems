@@ -6,8 +6,8 @@ const workSessionService = new WorkSessionService()
 
 export async function getActiveWorkSession(request: any, reply: any) {
   const auth = requireTenantContext(request)
-  const session = await workSessionService.getActive(auth.tenantId, auth.userId)
-  return reply.send({ data: session ?? null })
+  const sessions = await workSessionService.listActive(auth.tenantId, auth.userId)
+  return reply.send({ data: sessions })
 }
 
 export async function startWorkSession(request: any, reply: any) {

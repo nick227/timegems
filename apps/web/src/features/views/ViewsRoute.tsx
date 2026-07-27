@@ -17,7 +17,6 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { LoadMoreButton } from '@/components/ui/LoadMoreButton'
-import { PageHeader } from '@/components/ui/PageHeader'
 import { RichTextView } from '@/components/ui/RichTextView'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useRovingRadioGroup } from '@/components/ui/hooks/useRovingRadioGroup'
@@ -249,9 +248,7 @@ export function ViewsRoute() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5 px-4 py-6">
-      <PageHeader title="Activity" />
-
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1 rounded-lg bg-surface p-1" {...periodGroup.groupProps} aria-label="Period">
           {PERIODS.map((item) => (

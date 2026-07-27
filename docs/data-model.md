@@ -15,6 +15,10 @@
 - **GemAccount** is the stable per-user/project database lock used to serialize incremental settlement and full replay even when a project does not yet have a gem type.
 - **Presence is deliberately not a table.** It's ephemeral, in-memory, per server process (see functional-design.md) — ephemeral state has no business in the durable schema, and the whole point is that losing it costs nothing because `WorkSession` remains authoritative for anything that matters.
 - **Goal** is the planning unit underneath the time-tracker surface: optionally scoped to a `Project` (`projectId`), carries `progressPercent` (0-100, manually reported) and `complexityScore` (1-5 relative sizing) for planning/estimation, and an optional `estimatedHours`. It's either agent-authored (Steering; starts `PROPOSED`, needs human approval, `createdByUserId` null) or human-authored (`createGoal`; starts `ACTIVE` directly, no approval gate — nobody needs to approve their own goal). `WorkSession.goalId` is how logged time rolls up to a goal: the API's `loggedSec` is a live `SUM(activeDurationSec)` over that goal's `STOPPED` sessions, not a stored/replicated field, so it can never drift out of sync.
+- **GithubWebhookDelivery** is the raw inbound GitHub webhook row, deduplicated by `githubDeliveryId` (the `X-GitHub-Delivery` header). It answers "have we already processed this exact webhook delivery?"
+- **ProjectEvent** is the canonical provider-neutral project activity unit used by the unified feed. It carries `source` (`HUMAN` | `GITHUB` | `SYSTEM` | `AI`), a provider-neutral `kind` string, and an `externalId` unique within `(projectId, source)`. For GitHub events that idempotency key is deliberately *not* just a commit SHA; it is derived as `github:{deliveryId}:{event}:{entityId}:{action}` so the same GitHub entity can appear in multiple webhook contexts without colliding.
+- **ProjectUpdateJob** is the durable batching/retry layer between raw project activity and generated AI text. Related GitHub push/check/PR events accumulate into one grouped job via a stable `dedupeKey`.
+- **ProjectUpdate** is the persisted AI-generated summary artifact. It stores `sourceEventIds`, model metadata, confidence, and evidence/links so a human can audit exactly what the writer had available.
 
 ## Relationships (textual ERD)
 
@@ -31,6 +35,10 @@ Tenant 1---* AgentEmployee 1---* AgentReport *---0..1 Team/Project
 Tenant 1---* Goal *---0..1 AgentReport (source), *---0..1 Project, *---0..1 User (createdBy)
 Tenant 1---* Integration
 Tenant 1---* GoogleDocLink / DiscordBinding / GithubBinding
+Tenant 1---* GithubWebhookDelivery
+Tenant 1---* ProjectEvent *---1 Project
+Tenant 1---* ProjectUpdateJob *---1 Project
+Tenant 1---* ProjectUpdate *---1 Project
 User   1---0..1 AdminUser
 Project 1---0..1 GemType
 WorkSession 1---0..1 GemLedgerEntry (unique per session)
@@ -179,8 +187,60 @@ GithubBinding:
   id: uuid
   tenantId: -> Tenant
   installationId: string
+  repoId: string
   repoFullName: string
-  linkedProjectId: -> Project?
+  linkedProjectId: -> Project
+  # unique(tenantId, linkedProjectId, repoId) -- many repos per project allowed
+
+GithubWebhookDelivery:
+  id: uuid
+  githubDeliveryId: string               # unique; raw X-GitHub-Delivery
+  event: string
+  payload: json
+  processed: bool
+  error: text?
+
+ProjectEvent:
+  id: uuid
+  tenantId: -> Tenant
+  projectId: -> Project
+  source: enum(human, github, system, ai)
+  kind: string
+  externalId: string                     # github:{deliveryId}:{event}:{entityId}:{action}
+  title: string?
+  body: text?
+  payload: json
+  actorUserId: -> User?
+  occurredAt: datetime
+  # unique(projectId, source, externalId)
+
+ProjectUpdateJob:
+  id: uuid
+  tenantId: -> Tenant
+  projectId: -> Project
+  status: enum(pending, processing, completed, failed, dead)
+  sourceEventIds: json
+  dedupeKey: string                      # unique, used for grouped push/PR/check jobs
+  batchKey: string?
+  attemptCount: int
+  maxAttempts: int
+  scheduledAt: datetime
+  lockedAt: datetime?
+  lockedBy: string?
+  lastError: text?
+
+ProjectUpdate:
+  id: uuid
+  tenantId: -> Tenant
+  projectId: -> Project
+  body: text
+  confidence: float
+  modelName: string
+  modelVersion: string?
+  sourceEventIds: json
+  evidence: json
+  provenance: enum(ai, human)
+  createdAt: datetime
 
 AdminUser:
   id: uuid

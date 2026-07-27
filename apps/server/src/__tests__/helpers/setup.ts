@@ -3,12 +3,17 @@ import { afterEach } from 'vitest'
 
 // clean between tests — order matters for FK constraints (children before parents)
 afterEach(async () => {
+  await db.projectUpdateJob.deleteMany()
+  await db.projectUpdate.deleteMany()
+  await db.projectEvent.deleteMany()
+  await db.githubWebhookDelivery.deleteMany()
   await db.goal.deleteMany()
   await db.agentReport.deleteMany()
   await db.agentEmployee.deleteMany()
   await db.googleDocLink.deleteMany()
   await db.discordBinding.deleteMany()
   await db.githubBinding.deleteMany()
+  await db.githubInstallation.deleteMany()
   await db.integration.deleteMany()
   await db.note.deleteMany()
   await db.gemLedgerEntry.deleteMany()

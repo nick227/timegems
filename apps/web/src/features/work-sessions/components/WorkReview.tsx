@@ -38,7 +38,7 @@ export function WorkReview({
 
   return (
     <div className="min-h-screen px-4 py-10 max-w-xl mx-auto space-y-6">
-      <div className="text-center space-y-1">
+      <div className="space-y-1">
         <p className="text-sm text-muted-foreground">Session summary</p>
         <p className="text-3xl font-semibold tabular-nums">{formatDuration(elapsedSeconds)}</p>
         {projectName && <p className="text-sm text-muted-foreground">{projectName}</p>}

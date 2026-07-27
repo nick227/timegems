@@ -4,9 +4,18 @@ import { GemService } from './GemService'
 import { AgentEmployeeService } from './AgentEmployeeService'
 import { HttpError } from '../lib/errors'
 import { sanitizeRichText } from '../lib/sanitizeHtml'
+import { generateSessionName } from '../lib/sessionName'
 
 const gemService = new GemService()
 const agentEmployeeService = new AgentEmployeeService()
+
+// UserActiveSession's guard row stores this instead of a literal null for
+// an unassigned session's projectId. MySQL's unique index treats every NULL
+// as distinct, so two real nulls would never collide -- which is exactly
+// wrong here, since "no project" should still only allow one concurrent
+// session per user, same as any real project would. A non-null sentinel
+// makes @@unique([userId, projectId]) actually enforce that bucket too.
+const UNASSIGNED_PROJECT_GUARD = '__unassigned__'
 
 const detailInclude = {
   notes: { orderBy: { createdAt: 'asc' as const } },
@@ -47,12 +56,16 @@ function toDetail<T extends { gemLedgerEntry: { gemsAwarded: number } | null }>(
 }
 
 export class WorkSessionService {
-  async getActive(tenantId: string, userId: string) {
-    const session = await db.workSession.findFirst({
+  // A user can have several concurrent active sessions -- one per project
+  // (or one unassigned one; see UserActiveSession's schema comment) -- so
+  // this is a list, not a single nullable session.
+  async listActive(tenantId: string, userId: string) {
+    const sessions = await db.workSession.findMany({
       where: { tenantId, userId, status: { not: 'STOPPED' } },
       include: detailInclude,
+      orderBy: cursorOrderBy,
     })
-    return session ? toDetail(session) : null
+    return sessions.map(toDetail)
   }
 
   async start(tenantId: string, userId: string, projectId?: string | null, goalId?: string | null) {
@@ -71,6 +84,7 @@ export class WorkSessionService {
             userId,
             projectId: projectId ?? null,
             goalId: goalId ?? null,
+            name: generateSessionName(),
             status: 'RUNNING',
             startedAt: now,
             intervals: { create: [{ kind: 'ACTIVE', startedAt: now }] },
@@ -78,17 +92,20 @@ export class WorkSessionService {
           include: detailInclude,
         })
 
-        // userId is the primary key. Concurrent starts may both create their
-        // WorkSession, but only one guard insert can commit; the losing
-        // transaction rolls its newly-created session back.
+        // @@unique([userId, projectId]) is the actual guard. Concurrent
+        // starts *for the same project* (or two unassigned starts, via the
+        // sentinel) may both create their WorkSession, but only one guard
+        // insert can commit; the losing transaction rolls its newly-created
+        // session back. Starts for two different real projects don't
+        // contend at all.
         await tx.userActiveSession.create({
-          data: { userId, workSessionId: session.id, createdAt: now },
+          data: { userId, projectId: projectId ?? UNASSIGNED_PROJECT_GUARD, workSessionId: session.id, createdAt: now },
         })
         return toDetail(session)
       })
     } catch (error) {
       if ((error as any)?.code === 'P2002') {
-        throw new HttpError(409, 'An active session already exists')
+        throw new HttpError(409, projectId ? 'An active session already exists for this project' : 'An active unassigned session already exists')
       }
       throw error
     }

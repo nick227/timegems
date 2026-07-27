@@ -41,6 +41,7 @@ model User {
   gemAccounts      GemAccount[]
   activeSessions   UserActiveSession[]
   goalsCreated     Goal[]
+  projectEvents    ProjectEvent[]
 }
 
 model Session {
@@ -92,9 +93,13 @@ model Tenant {
   goals            Goal[]
   integrations     Integration[]
   googleDocLinks   GoogleDocLink[]
-  discordBindings  DiscordBinding[]
-  githubBindings   GithubBinding[]
-  activeSessions   Session[]
+  discordBindings     DiscordBinding[]
+  githubBindings      GithubBinding[]
+  githubInstallations GithubInstallation[]
+  projectEvents       ProjectEvent[]
+  projectUpdates      ProjectUpdate[]
+  projectUpdateJobs   ProjectUpdateJob[]
+  activeSessions      Session[]
   gemLedgerEntries GemLedgerEntry[]
 }
 
@@ -173,6 +178,9 @@ model Project {
   agentReports     AgentReport[]
   googleDocLinks   GoogleDocLink[]
   githubBindings   GithubBinding[]
+  projectEvents    ProjectEvent[]
+  projectUpdates   ProjectUpdate[]
+  projectUpdateJobs ProjectUpdateJob[]
   gemType          GemType?
   gemLedgerEntries GemLedgerEntry[]
   gemBalances      GemBalance[]
@@ -520,17 +528,145 @@ model DiscordBinding {
   @@index([tenantId])
 }
 
+// One row per (tenant, project, repo). linkedProjectId is required — a binding
+// always points at a project. The unique key is (tenantId, linkedProjectId, repoId),
+// so a project may bind many repositories; the same repo cannot bind twice to the
+// same project within a tenant.
 model GithubBinding {
   id              String   @id @default(cuid())
   tenantId        String
   installationId  String
+  repoId          String
   repoFullName    String
-  linkedProjectId String?
+  linkedProjectId String
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  tenant        Tenant   @relation(fields: [tenantId], references: [id])
-  linkedProject Project? @relation(fields: [linkedProjectId], references: [id])
+  tenant        Tenant             @relation(fields: [tenantId], references: [id])
+  linkedProject Project            @relation(fields: [linkedProjectId], references: [id])
+  installation  GithubInstallation @relation(fields: [installationId], references: [installationId], onDelete: Cascade)
+
+  @@unique([tenantId, linkedProjectId, repoId])
+  @@index([tenantId])
+  @@index([installationId])
+}
+
+model GithubInstallation {
+  id               String   @id @default(cuid())
+  tenantId         String
+  installationId   String   @unique
+  accountName      String
+  accountAvatarUrl String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id])
+  bindings GithubBinding[]
 
   @@index([tenantId])
+}
+
+// Raw GitHub webhook deliveries — idempotent on githubDeliveryId (X-GitHub-Delivery).
+// Distinct from ProjectEvent.externalId, which identifies the normalized entity/event.
+model GithubWebhookDelivery {
+  id               String   @id @default(cuid())
+  githubDeliveryId String   @unique
+  event            String
+  payload          Json
+  processed        Boolean  @default(false)
+  error            String?  @db.Text
+  createdAt        DateTime @default(now())
+}
+
+// Provider-neutral project activity unit. Human notes, GitHub system events,
+// and AI-generated updates all share this shape. externalId is scoped per
+// (projectId, source) — for GitHub use github:{githubDeliveryId}:{event}:{entityId}:{action}
+// so the same commit SHA can appear in multiple webhook contexts without colliding.
+model ProjectEvent {
+  id          String             @id @default(cuid())
+  tenantId    String
+  projectId   String
+  source      ProjectEventSource
+  kind        String
+  externalId  String             @db.VarChar(512)
+  title       String?
+  body        String?            @db.Text
+  payload     Json
+  actorUserId String?
+  occurredAt  DateTime
+  createdAt   DateTime           @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
+  actor   User?   @relation(fields: [actorUserId], references: [id])
+
+  @@unique([projectId, source, externalId])
+  @@index([tenantId, projectId, occurredAt])
+  @@index([kind])
+}
+
+enum ProjectEventSource {
+  HUMAN
+  GITHUB
+  SYSTEM
+  AI
+}
+
+model ProjectUpdate {
+  id             String                  @id @default(cuid())
+  tenantId       String
+  projectId      String
+  body           String                  @db.Text
+  confidence     Float
+  modelName      String
+  modelVersion   String?
+  sourceEventIds Json
+  evidence       Json
+  provenance     ProjectUpdateProvenance @default(AI)
+  createdAt      DateTime                @default(now())
+
+  tenant  Tenant             @relation(fields: [tenantId], references: [id])
+  project Project            @relation(fields: [projectId], references: [id])
+  job     ProjectUpdateJob?
+
+  @@index([tenantId, projectId, createdAt])
+}
+
+enum ProjectUpdateProvenance {
+  AI
+  HUMAN
+}
+
+model ProjectUpdateJob {
+  id              String                 @id @default(cuid())
+  tenantId        String
+  projectId       String
+  status          ProjectUpdateJobStatus @default(PENDING)
+  attemptCount    Int                    @default(0)
+  maxAttempts     Int                    @default(3)
+  scheduledAt     DateTime               @default(now())
+  lockedAt        DateTime?
+  lockedBy        String?
+  lastError       String?                @db.Text
+  batchKey        String?
+  sourceEventIds  Json
+  dedupeKey       String                 @unique
+  projectUpdateId String?                @unique
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  project       Project        @relation(fields: [projectId], references: [id])
+  projectUpdate ProjectUpdate? @relation(fields: [projectUpdateId], references: [id])
+
+  @@index([status, scheduledAt])
+  @@index([tenantId, projectId])
+}
+
+enum ProjectUpdateJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  DEAD
 }

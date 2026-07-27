@@ -17,6 +17,17 @@ import { registerErrorHandler } from './lib/errorHandler'
 
 const server = Fastify({ logger: true })
 
+server.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+  try {
+    ;(req as any).rawBody = body
+    done(null, JSON.parse(typeof body === 'string' ? body : body.toString('utf8')))
+  } catch (err: any) {
+    err.statusCode = 400
+    done(err, undefined)
+  }
+})
+
+
 const specPath = resolve(__dirname, '../../../packages/api-spec/openapi.yaml')
 const spec = load(readFileSync(specPath, 'utf-8')) as object
 

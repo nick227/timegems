@@ -7,7 +7,7 @@ import {
   useGoals,
   useCreateGoal,
   useUpdateGoal,
-  useActiveWorkSession,
+  useActiveWorkSessions,
   useReviewWorkSession,
 } from '@timegems/sdk'
 import { ShieldAlert } from 'lucide-react'
@@ -17,12 +17,14 @@ import { Button } from '@/components/ui/Button'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { formatDate } from '@/lib/formatDate'
 import { GemTypeEditor } from './components/GemTypeEditor'
+import { GithubRepositoryBindings } from './components/GithubRepositoryBindings'
 import { GoalCard, CreateGoalForm } from '@/features/goals'
 import { toast } from 'sonner'
 import { useAuthorization } from '@/lib/Authorization'
 import { QueryErrorState } from '@/components/ui/QueryErrorState'
 import { StartProjectWorkButton } from './components/StartProjectWorkButton'
 import { ProjectGoalCsvImport } from './components/ProjectGoalCsvImport'
+import { ProjectFeed } from '@/features/project-activity'
 
 export function ProjectRoute() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -30,9 +32,9 @@ export function ProjectRoute() {
   const projectQuery = useProject(projectId!)
   const { data, isLoading } = projectQuery
   const updateMutation = useUpdateProject(projectId!)
-  const activeSessionQuery = useActiveWorkSession()
+  const activeSessionsQuery = useActiveWorkSessions()
   const reviewSessionMutation = useReviewWorkSession()
-  const activeSession = activeSessionQuery.data?.data ?? null
+  const sessions = activeSessionsQuery.data?.data ?? []
   const goalsQuery = useGoals({ projectId })
   const { data: goalsData } = goalsQuery
   const createGoalMutation = useCreateGoal()
@@ -49,7 +51,7 @@ export function ProjectRoute() {
         error={projectQuery.error}
         resource="Project"
         onRetry={() => void projectQuery.refetch()}
-        returnTo="/projects"
+        returnTo="/settings?tab=projects"
         returnLabel="Return to Projects"
       />
     )
@@ -62,11 +64,13 @@ export function ProjectRoute() {
         error={new ApiError(404, 'Project not found')}
         resource="Project"
         onRetry={() => void projectQuery.refetch()}
-        returnTo="/projects"
+        returnTo="/settings?tab=projects"
         returnLabel="Return to Projects"
       />
     )
   }
+
+  const activeSession = sessions.find((s) => s.projectId === project.id) ?? null
 
   async function handleArchiveToggle() {
     try {
@@ -84,7 +88,7 @@ export function ProjectRoute() {
     try {
       await reviewSessionMutation.mutateAsync(activeSession.id)
       toast.success('Timing stopped. Review your session to finish it.')
-      navigate('/')
+      navigate(`/work/${activeSession.id}`)
     } catch {
       // handled by the global mutation error toast
     }
@@ -101,26 +105,25 @@ export function ProjectRoute() {
           <StartProjectWorkButton
             projectId={project.id}
             projectName={project.name}
-            activeSession={activeSession}
-            activeSessionLoading={!activeSessionQuery.isSuccess}
-            showOtherActiveSession
+            sessions={sessions}
+            sessionsLoading={!activeSessionsQuery.isSuccess}
           />
         )}
       </div>
 
-      {activeSessionQuery.isError && (
+      {activeSessionsQuery.isError && (
         <div role="alert" className="rounded-lg bg-destructive/10 px-4 py-3 text-sm">
           <p className="font-medium">Your current work status could not be loaded.</p>
           <p className="mt-1 text-muted-foreground">
             Retry before starting work so an existing session is not overlooked.
           </p>
-          <Button className="mt-3" size="sm" variant="outline" onClick={() => void activeSessionQuery.refetch()}>
+          <Button className="mt-3" size="sm" variant="outline" onClick={() => void activeSessionsQuery.refetch()}>
             Retry work status
           </Button>
         </div>
       )}
 
-      {activeSession?.projectId === project.id && (
+      {activeSession && (
         <div role="status" className="space-y-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm">
           <p className="font-medium">
             {activeSession.status === 'RUNNING'
@@ -150,7 +153,7 @@ export function ProjectRoute() {
           )}
 
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => navigate('/')}>
+            <Button size="sm" onClick={() => navigate(`/work/${activeSession.id}`)}>
               {activeSession.status === 'REVIEWING' ? 'Review session' : 'Return to Work'}
             </Button>
             {activeSession.status !== 'REVIEWING' && (
@@ -180,6 +183,8 @@ export function ProjectRoute() {
       </Card>
 
       <GemTypeEditor projectId={project.id} gemType={project.gemType ?? null} editable={canManageProjects} />
+
+      <GithubRepositoryBindings projectId={project.id} editable={canManageProjects} />
 
       <div className="space-y-3">
         <p className="text-sm font-medium text-muted-foreground">Goals</p>
@@ -226,6 +231,8 @@ export function ProjectRoute() {
           </>
         )}
       </div>
+
+      <ProjectFeed projectId={project.id} />
 
       {canManageProjects && (
         <>

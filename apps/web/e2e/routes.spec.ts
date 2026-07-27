@@ -4,9 +4,13 @@ const apiURL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:3001'
 
 /**
  * One smoke test per main route, using the e2e fixture identity seeded by
- * global-setup.ts (e2e-tenant / e2e-project / e2e-team / e2e-report /
- * e2e-goal). Each test asserts one stable piece of key content -- proof the
- * route renders its real data, not just "didn't crash."
+ * global-setup.ts (e2e-tenant / e2e-project / e2e-team / e2e-report). Each
+ * test asserts one stable piece of key content -- proof the route renders
+ * its real data, not just "didn't crash." Projects/Teams/Agent
+ * Reports/Activity/Admin are tabs inside /settings now, not their own
+ * routes (see SettingsRoute) -- `?tab=` is a real deep link (also what a
+ * detail page's "Return to X" link uses), so those are covered via
+ * `/settings?tab=...` rather than a bare goto.
  */
 
 test('/ (work)', async ({ page }) => {
@@ -14,9 +18,9 @@ test('/ (work)', async ({ page }) => {
   await expect(page.getByRole('button', { name: /start work/i })).toBeVisible()
 })
 
-test('/projects', async ({ page }) => {
-  await page.goto('/projects')
-  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible()
+test('/settings?tab=projects', async ({ page }) => {
+  await page.goto('/settings?tab=projects')
+  await expect(page.getByRole('tab', { name: 'Projects', selected: true })).toBeVisible()
   await expect(page.getByText('E2E Project')).toBeVisible()
 })
 
@@ -29,7 +33,8 @@ test('/projects/:projectId', async ({ page }) => {
 test('project detail distinguishes not found', async ({ page }) => {
   await page.goto('/projects/missing-project')
   await expect(page.getByRole('heading', { name: 'Project not found' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Return to Projects' })).toBeVisible()
+  await page.getByRole('button', { name: 'Return to Projects' }).click()
+  await expect(page.getByRole('tab', { name: 'Projects', selected: true })).toBeVisible()
 })
 
 test('project detail distinguishes no access', async ({ page }) => {
@@ -57,9 +62,9 @@ test('project detail exposes retry after a load failure', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'E2E Project' })).toBeVisible()
 })
 
-test('/teams', async ({ page }) => {
-  await page.goto('/teams')
-  await expect(page.getByRole('heading', { name: 'Teams' })).toBeVisible()
+test('/settings?tab=teams', async ({ page }) => {
+  await page.goto('/settings?tab=teams')
+  await expect(page.getByRole('tab', { name: 'Teams', selected: true })).toBeVisible()
   await expect(page.getByText('E2E Team')).toBeVisible()
 })
 
@@ -83,17 +88,17 @@ test('/users/:userId', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'E2E User' })).toBeVisible()
 })
 
-test('/views', async ({ page }) => {
-  await page.goto('/views')
-  await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible()
+test('/settings?tab=activity', async ({ page }) => {
+  await page.goto('/settings?tab=activity')
+  await expect(page.getByRole('tab', { name: 'Activity', selected: true })).toBeVisible()
   // Period is a real radiogroup (see useRovingRadioGroup), not plain
-  // buttons -- "Daily"'s accessible role is radio, not button.
+  // buttons -- "Day"'s accessible role is radio, not button.
   await expect(page.getByRole('radio', { name: 'Day' })).toBeVisible()
   await expect(page.getByRole('radio', { name: 'Week' })).toBeVisible()
   await expect(page.getByRole('radio', { name: 'Month' })).toBeVisible()
 })
 
-test('/views exposes a recoverable load failure', async ({ page }) => {
+test('/settings?tab=activity exposes a recoverable load failure', async ({ page }) => {
   let attempts = 0
   await page.route('**/reports/time-summary?**', async (route) => {
     attempts += 1
@@ -104,27 +109,21 @@ test('/views exposes a recoverable load failure', async ({ page }) => {
     await route.continue()
   })
 
-  await page.goto('/views')
+  await page.goto('/settings?tab=activity')
   await expect(page.getByText('Activity could not be loaded')).toBeVisible()
   await page.getByRole('button', { name: 'Retry' }).click()
   await expect(page.getByRole('region', { name: 'Activity summary' })).toBeVisible()
 })
 
-test('/reports', async ({ page }) => {
-  await page.goto('/reports')
-  await expect(page.getByRole('heading', { name: 'Agent Reports' })).toBeVisible()
+test('/settings?tab=reports', async ({ page }) => {
+  await page.goto('/settings?tab=reports')
+  await expect(page.getByRole('tab', { name: 'Agent Reports', selected: true })).toBeVisible()
   await expect(page.getByText('E2E fixture report')).toBeVisible()
 })
 
 test('/reports/:agentReportId', async ({ page }) => {
   await page.goto('/reports/e2e-report')
   await expect(page.getByRole('heading', { name: 'E2E fixture report' })).toBeVisible()
-})
-
-test('/goals', async ({ page }) => {
-  await page.goto('/goals')
-  await expect(page.getByRole('heading', { name: 'Goals' })).toBeVisible()
-  await expect(page.getByText('E2E fixture goal')).toBeVisible()
 })
 
 test('/integrations', async ({ page }) => {
@@ -136,14 +135,27 @@ test('/integrations', async ({ page }) => {
 test('/settings', async ({ page }) => {
   await page.goto('/settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Account', selected: true })).toBeVisible()
   await expect(page.getByLabel('Username')).toHaveValue('E2E User')
   await expect(page.getByText('Gem Bank')).toBeVisible()
 })
 
-test('/admin', async ({ page }) => {
-  await page.goto('/admin')
-  await expect(page.getByRole('heading', { name: 'Admin' })).toBeVisible()
+test('/settings?tab=admin', async ({ page }) => {
+  await page.goto('/settings?tab=admin')
+  await expect(page.getByRole('tab', { name: 'Admin', selected: true })).toBeVisible()
   await expect(page.getByText('E2E Tenant')).toBeVisible()
+})
+
+test('no drawer: branding returns to Work, account menu is the way to Settings', async ({ page }) => {
+  await page.goto('/settings')
+  await expect(page.getByRole('button', { name: 'Open menu' })).toHaveCount(0)
+
+  await page.getByRole('link', { name: 'TimeGems' }).click()
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByRole('heading', { name: 'Work' })).toBeVisible()
+
+  await page.getByRole('button', { name: /E2E User/ }).click()
+  await expect(page).toHaveURL(/\/settings$/)
 })
 
 test('unknown authenticated route renders a recoverable 404', async ({ page }) => {

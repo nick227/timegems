@@ -313,6 +313,91 @@ components:
         archived: { type: boolean }
         gemType: { $ref: '#/components/schemas/UpdateGemTypeInput' }
 
+    ProjectFeedProvenance:
+      type: string
+      enum: [human, github, ai, system]
+
+    ProjectFeedLink:
+      type: object
+      required: [label, url]
+      properties:
+        label: { type: string }
+        url: { type: string }
+
+    ProjectFeedEvidence:
+      type: object
+      required: [links]
+      properties:
+        commits:
+          type: array
+          items:
+            type: object
+            required: [sha, message]
+            properties:
+              sha: { type: string }
+              message: { type: string }
+              url: { type: [string, 'null'] }
+        filesChanged:
+          type: array
+          items: { type: string }
+        pullRequest:
+          type: object
+          required: [number, title, url]
+          properties:
+            number: { type: integer }
+            title: { type: string }
+            url: { type: string }
+            state: { type: [string, 'null'] }
+        checkRun:
+          type: object
+          required: [name, conclusion]
+          properties:
+            name: { type: string }
+            conclusion: { type: [string, 'null'] }
+            url: { type: [string, 'null'] }
+        limitations:
+          type: array
+          items: { type: string }
+        links:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectFeedLink' }
+
+    ProjectFeedActor:
+      type: object
+      required: [id, name, avatarUrl]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        avatarUrl: { type: [string, 'null'] }
+
+    ProjectFeedItem:
+      type: object
+      required: [id, projectId, provenance, kind, title, body, occurredAt, actor]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        provenance: { $ref: '#/components/schemas/ProjectFeedProvenance' }
+        kind: { type: string }
+        title: { type: [string, 'null'] }
+        body: { type: [string, 'null'] }
+        occurredAt: { type: string, format: date-time }
+        actor:
+          oneOf:
+            - $ref: '#/components/schemas/ProjectFeedActor'
+            - type: 'null'
+        workSessionId: { type: [string, 'null'] }
+        noteId: { type: [string, 'null'] }
+        sourceEventIds:
+          type: array
+          items: { type: string }
+        confidence: { type: number }
+        modelName: { type: string }
+        modelVersion: { type: [string, 'null'] }
+        evidence: { $ref: '#/components/schemas/ProjectFeedEvidence' }
+        links:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectFeedLink' }
+
     # ── Core work loop ────────────────────────────────────────────────────
     Note:
       type: object
@@ -350,13 +435,16 @@ components:
 
     WorkSession:
       type: object
-      required: [id, tenantId, userId, status, startedAt, activeDurationSec, createdAt, updatedAt]
+      required: [id, tenantId, userId, name, status, startedAt, activeDurationSec, createdAt, updatedAt]
       properties:
         id: { type: string }
         tenantId: { type: string }
         userId: { type: string }
         projectId: { type: [string, 'null'] }
         goalId: { type: [string, 'null'] }
+        name:
+          type: string
+          description: Auto-generated at creation (e.g. "Quiet Focus 12") -- identifies this session in the floating indicator, project room, and history when no project name says it better.
         status: { $ref: '#/components/schemas/WorkSessionStatus' }
         startedAt: { type: string, format: date-time }
         stoppedAt: { type: [string, 'null'], format: date-time }
@@ -594,6 +682,81 @@ components:
       type: object
       properties:
         suspended: { type: boolean }
+
+    # ── GitHub App Integration ────────────────────────────────────────────
+    GithubInstallation:
+      type: object
+      required: [id, tenantId, installationId, accountName, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        installationId: { type: string }
+        accountName: { type: string }
+        accountAvatarUrl: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    GithubBinding:
+      type: object
+      required: [id, tenantId, installationId, repoId, repoFullName, linkedProjectId, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        installationId: { type: string }
+        repoId: { type: string }
+        repoFullName: { type: string }
+        linkedProjectId: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    GithubRepository:
+      type: object
+      required: [id, name, fullName, private, htmlUrl]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        fullName: { type: string }
+        private: { type: boolean }
+        htmlUrl: { type: string }
+
+    ProjectEventSource:
+      type: string
+      enum: [HUMAN, GITHUB, SYSTEM, AI]
+
+    ProjectEvent:
+      type: object
+      required: [id, tenantId, projectId, source, kind, externalId, payload, occurredAt, createdAt]
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        projectId: { type: string }
+        source: { $ref: '#/components/schemas/ProjectEventSource' }
+        kind:
+          type: string
+          description: Provider-neutral event kind (e.g. NOTE_CREATED, GITHUB_PUSH, PROJECT_UPDATE)
+        externalId:
+          type: string
+          description: Idempotency key within (projectId, source). GitHub uses github:{githubDeliveryId}:{event}:{entityId}:{action}
+        title: { type: [string, 'null'] }
+        body: { type: [string, 'null'] }
+        payload: { type: object }
+        actorUserId: { type: [string, 'null'] }
+        occurredAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    RegisterGithubInstallationInput:
+      type: object
+      required: [installationId]
+      properties:
+        installationId: { type: string }
+
+    BindGithubRepoInput:
+      type: object
+      required: [installationId, repoId, repoFullName]
+      properties:
+        installationId: { type: string }
+        repoId: { type: string }
+        repoFullName: { type: string }
 
 paths:
   # ── Auth ────────────────────────────────────────────────────────────────
@@ -1203,26 +1366,91 @@ paths:
                 properties:
                   data: { $ref: '#/components/schemas/Project' }
 
+  /projects/{projectId}/feed:
+    get:
+      operationId: listProjectFeed
+      tags: [projects]
+      summary: Chronological project activity feed (human notes, GitHub events, AI updates)
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '200':
+          description: Paginated project feed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProjectFeedItem' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+
+  /projects/{projectId}/updates/{updateId}:
+    get:
+      operationId: getProjectUpdate
+      tags: [projects]
+      summary: Fetch one persisted AI project update with evidence metadata
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: updateId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Project or update not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '200':
+          description: Project update
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/ProjectFeedItem' }
+
   # ── Core work loop ─────────────────────────────────────────────────────
   /work-sessions/active:
     get:
       operationId: getActiveWorkSession
       tags: [workSessions]
-      summary: The current user's running/paused session in the active tenant, if any
+      summary: The current user's active (non-STOPPED) sessions in the active tenant -- a list, since a user can run one concurrent session per project
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '200':
-          description: Active work session or null
+          description: Active work sessions (possibly empty)
           content:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
-                    oneOf:
-                      - $ref: '#/components/schemas/WorkSessionDetail'
-                      - type: 'null'
+                    type: array
+                    items: { $ref: '#/components/schemas/WorkSessionDetail' }
 
   /work-sessions/start:
     post:
@@ -1955,3 +2183,199 @@ paths:
                 type: object
                 properties:
                   data: { $ref: '#/components/schemas/AgentReport' }
+
+  /integrations/github/installations:
+    get:
+      operationId: listGithubInstallations
+      tags: [github]
+      summary: List registered GitHub installations for the current tenant
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: List of installations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/GithubInstallation' }
+    post:
+      operationId: registerGithubInstallation
+      tags: [github]
+      summary: Register a new GitHub installation or update/reuse an existing one
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterGithubInstallationInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '201':
+          description: Installation registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/GithubInstallation' }
+
+  /integrations/github/installations/{installationId}:
+    delete:
+      operationId: disconnectGithubInstallation
+      tags: [github]
+      summary: Disconnect a GitHub installation
+      parameters:
+        - in: path
+          name: installationId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '204':
+          description: Installation disconnected
+
+  /integrations/github/installations/{installationId}/repositories:
+    get:
+      operationId: listGithubInstallationRepositories
+      tags: [github]
+      summary: List repositories authorized for an installation
+      parameters:
+        - in: path
+          name: installationId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: List of authorized repositories
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/GithubRepository' }
+
+  /projects/{projectId}/github/bindings:
+    get:
+      operationId: listProjectGithubBindings
+      tags: [github]
+      summary: List GitHub repository bindings for a project
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: List of bindings
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/GithubBinding' }
+    post:
+      operationId: bindProjectGithubRepository
+      tags: [github]
+      summary: Bind a GitHub repository to a project
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BindGithubRepoInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '201':
+          description: Repository bound
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/GithubBinding' }
+
+  /projects/{projectId}/github/bindings/{bindingId}:
+    delete:
+      operationId: unbindProjectGithubRepository
+      tags: [github]
+      summary: Unbind a GitHub repository from a project
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: bindingId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '204':
+          description: Repository unbound
+
+  /webhooks/github:
+    post:
+      operationId: handleGithubWebhook
+      tags: [github]
+      security: []
+      summary: Receive GitHub webhook payloads
+      parameters:
+        - in: header
+          name: x-github-delivery
+          required: true
+          schema: { type: string }
+        - in: header
+          name: x-github-event
+          required: true
+          schema: { type: string }
+        - in: header
+          name: x-hub-signature-256
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: Webhook processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+        '400':
+          description: Malformed webhook request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          description: Invalid webhook signature
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+

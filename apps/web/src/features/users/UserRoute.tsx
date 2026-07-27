@@ -20,7 +20,7 @@ export function UserRoute() {
         error={userQuery.error}
         resource="User"
         onRetry={() => void userQuery.refetch()}
-        returnTo="/teams"
+        returnTo="/settings?tab=teams"
         returnLabel="Return to Teams"
       />
     )
@@ -33,7 +33,7 @@ export function UserRoute() {
         error={new ApiError(404, 'User not found')}
         resource="User"
         onRetry={() => void userQuery.refetch()}
-        returnTo="/teams"
+        returnTo="/settings?tab=teams"
         returnLabel="Return to Teams"
       />
     )

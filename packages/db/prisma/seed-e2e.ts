@@ -134,7 +134,7 @@ async function main() {
   // that starts work but doesn't reach Stop) leak into the next run --
   // routes.spec.ts's '/' test expects the idle "Start Work" state. Children
   // deleted first since none of these FKs cascade.
-  const staleSessions = await db.workSession.findMany({ where: { userId: user.id }, select: { id: true } })
+  const staleSessions = await db.workSession.findMany({ where: { userId: { in: [user.id, candidate.id] } }, select: { id: true } })
   const staleSessionIds = staleSessions.map((s) => s.id)
   if (staleSessionIds.length > 0) {
     await db.userActiveSession.deleteMany({ where: { workSessionId: { in: staleSessionIds } } })
@@ -143,8 +143,8 @@ async function main() {
     await db.workSessionInterval.deleteMany({ where: { workSessionId: { in: staleSessionIds } } })
     await db.workSession.deleteMany({ where: { id: { in: staleSessionIds } } })
   }
-  await db.gemBalance.deleteMany({ where: { userId: user.id } })
-  await db.gemAccount.deleteMany({ where: { userId: user.id } })
+  await db.gemBalance.deleteMany({ where: { userId: { in: [user.id, candidate.id] } } })
+  await db.gemAccount.deleteMany({ where: { userId: { in: [user.id, candidate.id] } } })
 
   const token = randomUUID()
   await db.session.create({

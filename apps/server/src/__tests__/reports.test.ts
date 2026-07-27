@@ -20,7 +20,7 @@ describe('getTimeSummary', () => {
     await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         projectId: project.id,
         status: 'STOPPED',
         stoppedAt: new Date(),
@@ -46,7 +46,7 @@ describe('getTimeSummary', () => {
     await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         projectId: project.id,
         status: 'STOPPED',
         stoppedAt: new Date(),
@@ -80,7 +80,7 @@ describe('getTimeSummary', () => {
       data: [
         {
           tenantId: testTenantId,
-          userId: testUserId,
+          userId: testUserId, name: 'Test session',
           projectId: project.id,
           goalId: goal.id,
           status: 'STOPPED',
@@ -89,7 +89,7 @@ describe('getTimeSummary', () => {
         },
         {
           tenantId: testTenantId,
-          userId: testUserId,
+          userId: testUserId, name: 'Test session',
           projectId: project.id,
           goalId: goal.id,
           status: 'STOPPED',

@@ -125,7 +125,7 @@ describe('adminRunAgentEmployee', () => {
     await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         status: 'STOPPED',
         stoppedAt: new Date(),
         activeDurationSec: 1800,
@@ -149,7 +149,7 @@ describe('adminRunAgentEmployee', () => {
       data: { tenantId: testTenantId, kind: 'QA', name: 'QA', schedule: 'on_change' },
     })
     await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'STOPPED', stoppedAt: new Date() },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'STOPPED', stoppedAt: new Date() },
     })
     const res = await app.inject({
       method: 'POST',
@@ -170,7 +170,7 @@ describe('adminRunAgentEmployee', () => {
     await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         projectId: project.id,
         status: 'STOPPED',
         stoppedAt: new Date(),
@@ -193,7 +193,7 @@ describe('adminRunAgentEmployee', () => {
       data: { tenantId: testTenantId, kind: 'CODE_REVIEW', name: 'Code Review', schedule: 'on_change' },
     })
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'STOPPED', stoppedAt: new Date() },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'STOPPED', stoppedAt: new Date() },
     })
     await db.note.create({ data: { workSessionId: session.id, authorId: testUserId, body: 'Fixed the login bug' } })
     const res = await app.inject({
@@ -215,7 +215,7 @@ describe('adminRunAgentEmployee', () => {
     await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         projectId: project.id,
         status: 'STOPPED',
         stoppedAt: new Date(),

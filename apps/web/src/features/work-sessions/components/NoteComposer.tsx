@@ -1,23 +1,26 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SmartTextEditor } from '@/components/ui/smart-text-editor'
 
 interface NoteComposerProps {
   onAdd: (body: string) => Promise<void>
   loading: boolean
-  /** The user's own recent note bodies for this project (plain text), fed to the suggestion chips. */
   recentTexts?: string[]
-  /** Enables @-mentions of teammates, scoped to the project's team if it has one. */
   teamId?: string
+  seedText?: string
 }
 
 // The fastest possible capture gesture: rich text (headings/links/lists/
 // media/mentions/AI-assist/voice all live in SmartTextEditor itself), Enter
 // saves and clears without ever leaving the field -- no separate "Add"
 // button to notice, aim for, or wait on.
-export function NoteComposer({ onAdd, loading, recentTexts, teamId }: NoteComposerProps) {
+export function NoteComposer({ onAdd, loading, recentTexts, teamId, seedText }: NoteComposerProps) {
   const [draft, setDraft] = useState('')
 
-  async function submit() {
+  useEffect(() => {
+    if (seedText) setDraft(seedText)
+  }, [seedText])
+
+  async function submit(html?: string) {
     if (loading) return
     // Clear *before* awaiting the save, not after -- Enter is handled by
     // Tiptap's own ProseMirror `handleKeyDown`, a raw DOM listener entirely
@@ -29,7 +32,7 @@ export function NoteComposer({ onAdd, loading, recentTexts, teamId }: NoteCompos
     // first sidesteps whatever that interaction is entirely -- and reads as
     // a faster, more optimistic capture gesture besides, which is the whole
     // point of this component.
-    const body = draft
+    const body = typeof html === 'string' ? html : draft
     setDraft('')
     await onAdd(body)
   }

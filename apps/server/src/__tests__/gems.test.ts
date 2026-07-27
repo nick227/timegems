@@ -21,7 +21,7 @@ describe('listGemBalances', () => {
     await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         projectId: project.id,
         status: 'STOPPED',
         stoppedAt: new Date(),
@@ -65,7 +65,7 @@ describe('atomic gem accounting', () => {
     const first = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         projectId: project.id,
         status: 'STOPPED',
         startedAt: new Date('2026-01-01T10:00:00.000Z'),
@@ -76,7 +76,7 @@ describe('atomic gem accounting', () => {
     const second = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         projectId: project.id,
         status: 'STOPPED',
         startedAt: new Date('2026-01-01T11:00:00.000Z'),
@@ -128,7 +128,7 @@ describe('atomic gem accounting', () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         projectId: project.id,
         status: 'STOPPED',
         stoppedAt: new Date(),
@@ -160,7 +160,7 @@ describe('atomic gem accounting', () => {
     const session = await db.workSession.create({
       data: {
         tenantId: testTenantId,
-        userId: testUserId,
+        userId: testUserId, name: 'Test session',
         projectId: project.id,
         status: 'STOPPED',
         stoppedAt: new Date(),

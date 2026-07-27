@@ -65,6 +65,16 @@ export function buildTestApp() {
   const app: FastifyInstance = Fastify()
 
   beforeAll(async () => {
+    app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+      try {
+        ;(req as any).rawBody = body
+        done(null, JSON.parse(typeof body === 'string' ? body : body.toString('utf8')))
+      } catch (err: any) {
+        err.statusCode = 400
+        done(err, undefined)
+      }
+    })
+
     await app.register(cookie, {
       secret: process.env.COOKIE_SECRET ?? 'test-cookie-secret-at-least-32-characters',
     })

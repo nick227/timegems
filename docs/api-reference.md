@@ -14,6 +14,7 @@
 | `POST /auth/claim/google` | Link a Google identity to the current (e.g. anonymous) user in place -- never creates a second account | Auth required | `200` |
 | `POST /auth/logout` | logout | Auth required | `200` |
 | `GET /auth/me` | getCurrentUser | Auth required | `200` |
+| `PATCH /auth/me` | Update the current user's display name | Auth required | `200` |
 
 ## Tenants
 
@@ -50,12 +51,14 @@
 | `POST /projects` | createProject | Auth required | `201` |
 | `GET /projects/{projectId}` | getProject | Auth required | `200` |
 | `PATCH /projects/{projectId}` | updateProject | Auth required | `200` |
+| `GET /projects/{projectId}/feed` | Chronological project activity feed (human notes, GitHub events, AI updates) | Auth required | `200` |
+| `GET /projects/{projectId}/updates/{updateId}` | Fetch one persisted AI project update with evidence metadata | Auth required | `200` |
 
 ## WorkSessions
 
 | Endpoint | Description | Auth | Success |
 |---|---|---|---|
-| `GET /work-sessions/active` | The current user's running/paused session in the active tenant, if any | Auth required | `200` |
+| `GET /work-sessions/active` | The current user's active (non-STOPPED) sessions in the active tenant -- a list, since a user can run one concurrent session per project | Auth required | `200` |
 | `POST /work-sessions/start` | startWorkSession | Auth required | `201` |
 | `GET /work-sessions/{workSessionId}` | getWorkSession | Auth required | `200` |
 | `PATCH /work-sessions/{workSessionId}` | Correct a session's duration, project, or goal; stopped-session corrections recompute gem ledgers | Auth required | `200` |
@@ -118,3 +121,16 @@
 | `PATCH /admin/users/{userId}` | adminUpdateUser | Auth required | `200` |
 | `GET /admin/agent-employees` | View configured agent employees (Summarizer in V1). Config editing is V2. | Auth required | `200` |
 | `POST /admin/agent-employees/{agentEmployeeId}/run` | Manually trigger a run now, outside its schedule | Auth required | `201` |
+
+## Github
+
+| Endpoint | Description | Auth | Success |
+|---|---|---|---|
+| `GET /integrations/github/installations` | List registered GitHub installations for the current tenant | Auth required | `200` |
+| `POST /integrations/github/installations` | Register a new GitHub installation or update/reuse an existing one | Auth required | `201` |
+| `DELETE /integrations/github/installations/{installationId}` | Disconnect a GitHub installation | Auth required | `204` |
+| `GET /integrations/github/installations/{installationId}/repositories` | List repositories authorized for an installation | Auth required | `200` |
+| `GET /projects/{projectId}/github/bindings` | List GitHub repository bindings for a project | Auth required | `200` |
+| `POST /projects/{projectId}/github/bindings` | Bind a GitHub repository to a project | Auth required | `201` |
+| `DELETE /projects/{projectId}/github/bindings/{bindingId}` | Unbind a GitHub repository from a project | Auth required | `204` |
+| `POST /webhooks/github` | Receive GitHub webhook payloads | Public | `200` |

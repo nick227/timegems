@@ -14,7 +14,7 @@ export interface SmartTextEditorProps {
   value: string
   onChange: (html: string) => void
   /** Enter submits instead of inserting a newline; Shift+Enter still inserts one. Omit for multi-paragraph contexts (e.g. description fields). */
-  onSubmit?: () => void
+  onSubmit?: (html: string) => void
   placeholder?: string
   autoFocus?: boolean
   disabled?: boolean
@@ -63,6 +63,8 @@ export function SmartTextEditor({
   const onSubmitRef = useRef(onSubmit)
   onChangeRef.current = onChange
   onSubmitRef.current = onSubmit
+
+  const editorRef = useRef<any>(null)
 
   // Every mention trigger the editor supports, in one place. Adding a new
   // one (e.g. a future `!goal` mention) means adding it to this array --
@@ -133,15 +135,21 @@ export function SmartTextEditor({
         const hasText = view.state.doc.textContent.trim().length > 0
         const hasMedia = view.dom.querySelector('img, video, audio') !== null
         if (!hasText && !hasMedia) return false
-        event.preventDefault()
-        onSubmitRef.current()
-        return true
+         event.preventDefault()
+         if (editorRef.current) {
+           onSubmitRef.current(editorRef.current.getHTML())
+         } else {
+           onSubmitRef.current('')
+         }
+         return true
       },
     },
     onUpdate: ({ editor }) => {
       onChangeRef.current(editor.getHTML())
     },
   }, [teamId])
+
+  editorRef.current = editor
 
   // Push external resets (e.g. clearing the field after submit) into the
   // editor without fighting the user's own typing -- only when `value`

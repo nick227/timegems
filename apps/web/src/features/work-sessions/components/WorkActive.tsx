@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import type { components } from '@timegems/sdk'
+import { Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { GemProgress } from '@/features/gems'
 import { PresenceStrip } from '@/features/presence'
@@ -6,7 +8,8 @@ import { ProjectPicker } from './ProjectPicker'
 import { GoalPicker } from './GoalPicker'
 import { NoteList } from './NoteList'
 import { NoteComposer } from './NoteComposer'
-import { formatDuration } from '../lib/formatDuration'
+import { ProjectFeed } from '@/features/project-activity'
+import { formatElapsedEstimate } from '../lib/formatDuration'
 import { formatTime } from '../lib/formatTime'
 
 type Project = components['schemas']['Project']
@@ -15,6 +18,7 @@ type Note = components['schemas']['Note']
 type GemType = components['schemas']['GemType']
 
 interface WorkActiveProps {
+  workSessionId: string
   isPaused: boolean
   elapsedSeconds: number
   startedAt: string
@@ -42,6 +46,7 @@ interface WorkActiveProps {
 }
 
 export function WorkActive({
+  workSessionId,
   isPaused,
   elapsedSeconds,
   startedAt,
@@ -67,54 +72,110 @@ export function WorkActive({
   recentTexts,
   teamId,
 }: WorkActiveProps) {
-  return (
-    <div className="min-h-screen px-4 py-10 max-w-xl mx-auto space-y-10">
-      <div className="text-center space-y-3">
-        <p className="text-sm font-medium text-muted-foreground">{isPaused ? 'Paused' : 'Working'}</p>
-        <p className="text-7xl font-bold tabular-nums tracking-tight">{formatDuration(elapsedSeconds)}</p>
-        <p className="text-sm text-muted-foreground">Started at {formatTime(startedAt)}</p>
+  const [composerOpen, setComposerOpen] = useState(false)
+  const [composerSeed, setComposerSeed] = useState<string | undefined>()
 
-        <div className="flex justify-center gap-3 pt-2">
+  async function handleAddNote(body: string) {
+    await onAddNote(body)
+    setComposerOpen(false)
+  }
+
+  return (
+    <div className="mx-auto min-h-screen w-full max-w-lg space-y-6 px-4 py-6">
+
+        <div className="w-full flex gap-4">
+          <h6>Online</h6>
+          <div>
+            <PresenceStrip />
+          </div>
+        </div>
+
+      <section className="space-y-3">
+        <div className="space-y-1">
+          <p className="text-sm font-semibold">{isPaused ? 'Paused' : 'Working'}</p>
+          <p className="text-lg font-medium tracking-tight">{formatElapsedEstimate(elapsedSeconds)} logged</p>
+          <p className="text-xs text-muted-foreground">
+            Started at {formatTime(startedAt)}
+            {!isPaused && ' · refreshes every 5 min'}
+          </p>
+        </div>
+
+        <div className="grid w-full max-w-xs grid-cols-2 gap-2 pt-1">
           {isPaused ? (
-            <Button size="lg" onClick={onResume} loading={resumePending}>
+            <Button className="w-full px-2" onClick={onResume} loading={resumePending}>
               Resume
             </Button>
           ) : (
-            <Button size="lg" variant="outline" onClick={onPause} loading={pausePending}>
+            <Button className="w-full px-2" variant="default" onClick={onPause} loading={pausePending}>
               Pause
             </Button>
           )}
-          <Button size="lg" variant="destructive" loading={reviewPending} onClick={onStop}>
+          <Button className="w-full px-2" variant="outline" size="icon" loading={reviewPending} onClick={onStop}>
             Stop
           </Button>
         </div>
 
-        <div className="flex justify-center pt-2">
-          <PresenceStrip />
-        </div>
-
         {gemType && (
-          <div className="max-w-xs mx-auto pt-2">
+          <div className="mx-auto w-full max-w-sm pt-1">
             <GemProgress gemType={gemType} carryInSec={carryInSec} elapsedSeconds={elapsedSeconds} />
           </div>
         )}
-      </div>
+      </section>
 
-      <ProjectPicker
-        projects={projects}
-        activeProjectId={activeProjectId}
-        onSelect={onSelectProject}
-        onCreate={onCreateProject}
-        creating={creatingProject}
-      />
+      <section className="border-t pt-5">
+        <ProjectPicker
+          projects={projects}
+          activeProjectId={activeProjectId}
+          onSelect={onSelectProject}
+          onCreate={onCreateProject}
+          creating={creatingProject}
+        />
+      </section>
 
-      <GoalPicker goals={goals} activeGoalId={activeGoalId} onSelect={onSelectGoal} />
+      {goals.length > 0 && (
+        <section className="border-t pt-5">
+          <GoalPicker goals={goals} activeGoalId={activeGoalId} onSelect={onSelectGoal} />
+        </section>
+      )}
 
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-muted-foreground">New Updates</p>
-        <NoteComposer onAdd={onAddNote} loading={addingNote} recentTexts={recentTexts} teamId={teamId} />
+      <section className="space-y-3 border-t pt-5">
+        <div className="flex items-center justify-between gap-3">
+          <Button
+            size="sm"
+            variant="outline"
+            aria-expanded={composerOpen}
+            className="w-[120px] truncate"
+            aria-controls="work-update-composer"
+            onClick={() => setComposerOpen((open) => !open)}
+          >
+            {composerOpen ? <X size={14} /> : <Plus size={14} />}
+            {composerOpen ? 'Cancel' : 'Add update'}
+          </Button>
+        </div>
+        {composerOpen && (
+          <div id="work-update-composer">
+            <NoteComposer
+              onAdd={handleAddNote}
+              loading={addingNote}
+              recentTexts={recentTexts}
+              teamId={teamId}
+              seedText={composerSeed}
+            />
+          </div>
+        )}
         <NoteList notes={notes} />
-      </div>
+      </section>
+
+      {activeProjectId && (
+        <ProjectFeed
+          projectId={activeProjectId}
+          compact
+          onUseInUpdate={(text) => {
+            setComposerSeed(text)
+            setComposerOpen(true)
+          }}
+        />
+      )}
     </div>
   )
 }

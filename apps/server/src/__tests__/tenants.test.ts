@@ -74,7 +74,7 @@ describe('selectActiveTenant', () => {
     const otherTenant = await db.tenant.create({ data: { name: 'Second Co', slug: 'second-co-switch-test' } })
     await db.membership.create({ data: { userId: testUserId, tenantId: otherTenant.id, role: 'OWNER' } })
     await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'RUNNING' },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'RUNNING' },
     })
 
     const res = await app.inject({

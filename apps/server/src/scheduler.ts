@@ -1,7 +1,10 @@
 import { db } from '@timegems/db'
 import { AgentEmployeeService } from './services/AgentEmployeeService'
+import { ProjectUpdateJobService } from './services/ProjectUpdateJobService'
+import { JOB_SWEEP_INTERVAL_MS } from './lib/projectActivity'
 
 const agentEmployeeService = new AgentEmployeeService()
+const projectUpdateJobService = new ProjectUpdateJobService()
 const SWEEP_INTERVAL_MS = 60_000
 
 // Deliberately not a full cron parser -- a small dependency-free mini-syntax
@@ -22,6 +25,14 @@ function parseIntervalMs(schedule: string): number | null {
 // tools that only ever run when a human clicks "Run now" -- see
 // docs/system-requirements.md FR-18 and docs/admin.md.
 export function startScheduler() {
+  setInterval(async () => {
+    try {
+      await projectUpdateJobService.sweepDueJobs()
+    } catch (err) {
+      console.error('[scheduler] project update job sweep failed', err)
+    }
+  }, JOB_SWEEP_INTERVAL_MS)
+
   setInterval(async () => {
     const employees = await db.agentEmployee.findMany({ where: { enabled: true } })
     const now = Date.now()

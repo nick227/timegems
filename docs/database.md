@@ -27,6 +27,11 @@
 - `GoogleDocLink`
 - `DiscordBinding`
 - `GithubBinding`
+- `GithubInstallation`
+- `GithubWebhookDelivery`
+- `ProjectEvent`
+- `ProjectUpdate`
+- `ProjectUpdateJob`
 
 ## Enums
 
@@ -40,3 +45,6 @@
 - `GoalStatus`
 - `IntegrationKind`
 - `IntegrationStatus`
+- `ProjectEventSource`
+- `ProjectUpdateProvenance`
+- `ProjectUpdateJobStatus`

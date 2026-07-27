@@ -20,11 +20,14 @@ interface UseModalBehaviorOptions {
  * moved in on open and restored to the trigger on close, Tab contained
  * inside (a real focus trap, not just visual layering), the rest of the app
  * marked `inert`/`aria-hidden` so a screen reader can't wander into it, and
- * background scroll locked. `Dialog` (centered, confirm-style) and `Drawer`
- * (edge-anchored panel) both build on this instead of each hand-rolling
- * their own subset of it -- that duplication (and the drift between them)
- * is what caused the hamburger drawer to end up with none of this despite
- * `Dialog` already having it.
+ * background scroll locked. `Dialog` (centered, confirm-style) builds on
+ * this instead of hand-rolling its own subset of it -- that kind of
+ * duplication (and the drift between copies) is what caused the app's old
+ * hamburger drawer to end up with none of this despite `Dialog` already
+ * having it. The drawer itself was retired when the hamburger nav was
+ * removed in favor of tabs inside /settings, but the lesson (share this
+ * behavior, don't re-derive it) still applies to any future modal-like
+ * primitive.
  *
  * Returns a `containerRef` the primitive must attach to its outermost
  * focusable panel element (given `tabIndex={-1}` by the caller so it's a

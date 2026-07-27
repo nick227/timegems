@@ -15,7 +15,7 @@ describe('listNotes', () => {
 
   it('GET /work-sessions/{workSessionId}/notes', async () => {
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'RUNNING' },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'RUNNING' },
     })
     await db.note.create({ data: { workSessionId: session.id, authorId: testUserId, body: 'Working on the API' } })
     const res = await app.inject({
@@ -37,7 +37,7 @@ describe('createNote', () => {
 
   it('POST /work-sessions/{workSessionId}/notes', async () => {
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'RUNNING' },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'RUNNING' },
     })
     const res = await app.inject({
       method: 'POST',
@@ -52,7 +52,7 @@ describe('createNote', () => {
 
   it('409s once the session is stopped', async () => {
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'STOPPED', stoppedAt: new Date() },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'STOPPED', stoppedAt: new Date() },
     })
     const res = await app.inject({
       method: 'POST',
@@ -65,7 +65,7 @@ describe('createNote', () => {
 
   it('cannot add a note to another user’s active session', async () => {
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'RUNNING' },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'RUNNING' },
     })
     const res = await app.inject({
       method: 'POST',
@@ -85,7 +85,7 @@ describe('updateNote', () => {
 
   it('corrects and sanitizes a saved note, marking its session corrected', async () => {
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'STOPPED', stoppedAt: new Date() },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'STOPPED', stoppedAt: new Date() },
     })
     const note = await db.note.create({
       data: { workSessionId: session.id, authorId: testUserId, body: '<p>Old note</p>' },
@@ -105,7 +105,7 @@ describe('updateNote', () => {
 
   it('allows a session manager to correct another member’s note', async () => {
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testOtherUserId, status: 'STOPPED', stoppedAt: new Date() },
+      data: { tenantId: testTenantId, userId: testOtherUserId, name: 'Test session', status: 'STOPPED', stoppedAt: new Date() },
     })
     const note = await db.note.create({
       data: { workSessionId: session.id, authorId: testOtherUserId, body: 'Old note' },
@@ -121,7 +121,7 @@ describe('updateNote', () => {
 
   it('does not let a member correct another user’s note', async () => {
     const session = await db.workSession.create({
-      data: { tenantId: testTenantId, userId: testUserId, status: 'STOPPED', stoppedAt: new Date() },
+      data: { tenantId: testTenantId, userId: testUserId, name: 'Test session', status: 'STOPPED', stoppedAt: new Date() },
     })
     const note = await db.note.create({
       data: { workSessionId: session.id, authorId: testUserId, body: 'Old note' },

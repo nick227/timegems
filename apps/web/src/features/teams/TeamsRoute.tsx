@@ -5,7 +5,6 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Field } from '@/components/ui/Field'
 import { Button } from '@/components/ui/Button'
-import { PageHeader } from '@/components/ui/PageHeader'
 import { ListPageShell } from '@/components/ui/ListPageShell'
 import { LoadMoreButton } from '@/components/ui/LoadMoreButton'
 import { Users } from 'lucide-react'
@@ -22,9 +21,7 @@ export function TeamsRoute() {
   const items = data?.pages.flatMap((page) => page.data) ?? []
 
   return (
-    <div className="max-w-xl mx-auto px-4 py-6 space-y-4">
-      <PageHeader title="Teams" />
-
+    <div className="space-y-4">
       {canManageTeams && (
         <div className="flex gap-2 items-end">
           <Field label="New team name" className="flex-1">

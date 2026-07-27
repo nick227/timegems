@@ -16,9 +16,10 @@ interface DialogProps {
  * Low-level modal primitive -- overlay + centered panel, closes on Escape
  * or backdrop click. `ConfirmDialog` builds the yes/no confirm pattern on
  * top of this; use this one directly only if a confirm/cancel footer
- * doesn't fit what you need. `Drawer` is the edge-anchored sibling -- both
- * share their focus/Escape/inert-background behavior via `useModalBehavior`
- * rather than each reimplementing it.
+ * doesn't fit what you need. Shares its focus/Escape/inert-background
+ * behavior with any other "layer on top of the page" primitive via
+ * `useModalBehavior` rather than reimplementing it (see that hook's own
+ * comment for why).
  */
 export function Dialog({ open, onOpenChange, title, description, children, className }: DialogProps) {
   const { containerRef } = useModalBehavior<HTMLDivElement>({ open, onOpenChange })
@@ -27,7 +28,7 @@ export function Dialog({ open, onOpenChange, title, description, children, class
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={() => onOpenChange(false)} aria-hidden="true" />
+      <div className="absolute inset-0 bg-black/10" onClick={() => onOpenChange(false)} aria-hidden="true" />
       <div
         ref={containerRef}
         role="dialog"

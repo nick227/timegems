@@ -1,9 +1,14 @@
 import { useQuery, useMutation, useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { getApiClient, ApiError } from '../client'
 
-export function useActiveWorkSession() {
+// A user can run one concurrent session per project (see
+// UserActiveSession's schema comment), so this is a list -- possibly empty,
+// possibly several. Named plural deliberately so a consumer can't
+// accidentally treat `.data.data` as a single session the way the old
+// singular endpoint allowed.
+export function useActiveWorkSessions() {
   return useQuery({
-    queryKey: ['work-session', 'active'],
+    queryKey: ['work-sessions', 'active'],
     queryFn: async () => {
       const { data, error, response } = await getApiClient().GET('/work-sessions/active')
       if (error) throw new ApiError(response.status, (error as any).error)
@@ -61,7 +66,8 @@ export function useStartWorkSession() {
       return data!
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(['work-session', 'active'], data)
+      if (data.data) queryClient.setQueryData(['work-session', data.data.id], data)
+      queryClient.invalidateQueries({ queryKey: ['work-sessions', 'active'] })
     },
   })
 }
@@ -76,8 +82,14 @@ export function usePauseWorkSession() {
       if (error) throw new ApiError(response.status, (error as any).error)
       return data!
     },
-    onSuccess: (data) => {
-      queryClient.setQueryData(['work-session', 'active'], data)
+    onSuccess: (data, workSessionId) => {
+      // The single-session detail query (used by /work/:workSessionId,
+      // which reads its own session by id rather than off the active list)
+      // has its own cache entry -- invalidating only the active list left it
+      // stale, so a transition here (e.g. Stop -> REVIEWING) never showed
+      // up on that route until something else happened to refetch it.
+      queryClient.setQueryData(['work-session', workSessionId], data)
+      queryClient.invalidateQueries({ queryKey: ['work-sessions', 'active'] })
     },
   })
 }
@@ -92,8 +104,9 @@ export function useResumeWorkSession() {
       if (error) throw new ApiError(response.status, (error as any).error)
       return data!
     },
-    onSuccess: (data) => {
-      queryClient.setQueryData(['work-session', 'active'], data)
+    onSuccess: (data, workSessionId) => {
+      queryClient.setQueryData(['work-session', workSessionId], data)
+      queryClient.invalidateQueries({ queryKey: ['work-sessions', 'active'] })
     },
   })
 }
@@ -108,8 +121,9 @@ export function useReviewWorkSession() {
       if (error) throw new ApiError(response.status, (error as any).error)
       return data!
     },
-    onSuccess: (data) => {
-      queryClient.setQueryData(['work-session', 'active'], data)
+    onSuccess: (data, workSessionId) => {
+      queryClient.setQueryData(['work-session', workSessionId], data)
+      queryClient.invalidateQueries({ queryKey: ['work-sessions', 'active'] })
     },
   })
 }
@@ -125,8 +139,18 @@ export function useStopWorkSession() {
       if (error) throw new ApiError(response.status, (error as any).error)
       return data!
     },
-    onSuccess: () => {
-      queryClient.setQueryData(['work-session', 'active'], { data: null })
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData(['work-session', variables.workSessionId], data)
+      // A stopped session leaves the active list immediately, not on the
+      // next background refetch -- without this, a route reading the active
+      // list right after Stop (e.g. `/` deciding whether to redirect
+      // somewhere or show Idle) can still see this session as active for
+      // one render, since `invalidateQueries` below only *schedules* a
+      // refetch rather than updating the cache synchronously.
+      queryClient.setQueryData(['work-sessions', 'active'], (old: any) =>
+        old ? { ...old, data: old.data.filter((s: any) => s.id !== variables.workSessionId) } : old,
+      )
+      queryClient.invalidateQueries({ queryKey: ['work-sessions', 'active'] })
       queryClient.invalidateQueries({ queryKey: ['work-sessions', 'list'] })
       queryClient.invalidateQueries({ queryKey: ['gem-balances'] })
       queryClient.invalidateQueries({ queryKey: ['time-summary'] })
@@ -146,7 +170,7 @@ export function useUpdateWorkSession(workSessionId: string) {
       return data!
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['work-session', 'active'] })
+      queryClient.invalidateQueries({ queryKey: ['work-sessions', 'active'] })
       queryClient.invalidateQueries({ queryKey: ['work-session', workSessionId] })
       queryClient.invalidateQueries({ queryKey: ['work-sessions', 'list'] })
       queryClient.invalidateQueries({ queryKey: ['gem-balances'] })

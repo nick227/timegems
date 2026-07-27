@@ -13,7 +13,11 @@ test('start work, capture a note through the rich text editor, see it rendered, 
   await page.goto('/')
   await page.getByRole('button', { name: /start work/i }).click()
   await expect(page.getByText('Working', { exact: true })).toBeVisible()
-  await expect(page).toHaveTitle(/\d{2}:\d{2}:\d{2} · TimeGems/)
+  await expect(page.getByText('Under 5 min logged')).toBeVisible()
+  await expect(page).toHaveTitle('Working · TimeGems')
+  await expect(page.locator('.ProseMirror')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Add update' }).click()
+  await expect(page.getByRole('group', { name: 'Update suggestions' }).getByRole('button')).toHaveCount(12)
 
   const editor = page.locator('.ProseMirror').first()
   await editor.click()

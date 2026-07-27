@@ -19,26 +19,27 @@ test('server capabilities gate navigation, routes, and privileged actions', asyn
     })
   })
 
-  await page.goto('/projects')
-  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible()
+  await page.goto('/settings?tab=projects')
+  await expect(page.getByRole('tab', { name: 'Projects', selected: true })).toBeVisible()
   await expect(page.getByLabel('New project name')).toHaveCount(0)
 
-  await page.getByRole('button', { name: /open menu/i }).click()
-  await expect(page.getByRole('link', { name: 'Admin' })).toHaveCount(0)
-  await expect(page.getByText('Administration', { exact: true })).toHaveCount(0)
-  await page.keyboard.press('Escape')
+  // Admin is a Settings tab now (see SettingsRoute), gated the same way the
+  // old drawer link was -- without the capability, the tab shouldn't even
+  // be offered, and the standalone /admin route no longer exists at all
+  // (folded entirely into Settings), so it 404s for everyone regardless of
+  // capability.
+  await expect(page.getByRole('tab', { name: 'Admin' })).toHaveCount(0)
 
   await page.goto('/admin')
-  await expect(page).toHaveURL(/\/$/)
-  await expect(page.getByRole('button', { name: /start work/i })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
 
   await page.goto('/projects/e2e-project')
   await expect(page.getByText('Sapphire')).toBeVisible()
   await expect(page.getByRole('button', { name: /edit gem type/i })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /archive project/i })).toHaveCount(0)
 
-  await page.goto('/teams')
-  await expect(page.getByRole('heading', { name: 'Teams' })).toBeVisible()
+  await page.goto('/settings?tab=teams')
+  await expect(page.getByRole('tab', { name: 'Teams', selected: true })).toBeVisible()
   await expect(page.getByLabel('New team name')).toHaveCount(0)
 
   await page.goto('/teams/e2e-team')

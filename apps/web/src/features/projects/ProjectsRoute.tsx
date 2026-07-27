@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useProjects, useCreateProject, useActiveWorkSession } from '@timegems/sdk'
+import { useProjects, useCreateProject, useActiveWorkSessions } from '@timegems/sdk'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Field } from '@/components/ui/Field'
 import { Button } from '@/components/ui/Button'
-import { PageHeader } from '@/components/ui/PageHeader'
 import { ListPageShell } from '@/components/ui/ListPageShell'
 import { LoadMoreButton } from '@/components/ui/LoadMoreButton'
 import { FolderKanban } from 'lucide-react'
@@ -22,22 +21,20 @@ export function ProjectsRoute() {
     debouncedQuery ? { q: debouncedQuery } : undefined,
   )
   const createMutation = useCreateProject()
-  const activeSessionQuery = useActiveWorkSession()
-  const activeSession = activeSessionQuery.data?.data ?? null
+  const activeSessionsQuery = useActiveWorkSessions()
+  const sessions = activeSessionsQuery.data?.data ?? []
   const { can } = useAuthorization()
   const canManageProjects = can('project:manage')
 
   const items = data?.pages.flatMap((page) => page.data) ?? []
 
   return (
-    <div className="max-w-xl mx-auto px-4 py-6 space-y-4">
-      <PageHeader title="Projects" />
-
-      {activeSessionQuery.isError && (
+    <div className="space-y-4">
+      {activeSessionsQuery.isError && (
         <div role="alert" className="rounded-lg bg-destructive/10 px-4 py-3 text-sm">
           <p className="font-medium">Your current work status could not be loaded.</p>
           <p className="mt-1 text-muted-foreground">Retry before starting work so an existing session is not overlooked.</p>
-          <Button className="mt-3" size="sm" variant="outline" onClick={() => void activeSessionQuery.refetch()}>
+          <Button className="mt-3" size="sm" variant="outline" onClick={() => void activeSessionsQuery.refetch()}>
             Retry work status
           </Button>
         </div>
@@ -107,8 +104,8 @@ export function ProjectsRoute() {
                   <StartProjectWorkButton
                     projectId={project.id}
                     projectName={project.name}
-                    activeSession={activeSession}
-                    activeSessionLoading={!activeSessionQuery.isSuccess}
+                    sessions={sessions}
+                    sessionsLoading={!activeSessionsQuery.isSuccess}
                     size="sm"
                   />
                 )}

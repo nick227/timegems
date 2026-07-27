@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAgentReports } from '@timegems/sdk'
 import { Card, CardContent } from '@/components/ui/Card'
-import { PageHeader } from '@/components/ui/PageHeader'
 import { ListPageShell } from '@/components/ui/ListPageShell'
 import { LoadMoreButton } from '@/components/ui/LoadMoreButton'
 import { formatDateTime } from '@/lib/formatDate'
@@ -13,9 +12,7 @@ export function ReportsRoute() {
   const items = data?.pages.flatMap((page) => page.data) ?? []
 
   return (
-    <div className="max-w-xl mx-auto px-4 py-6 space-y-3">
-      <PageHeader title="Agent Reports" />
-
+    <div className="space-y-3">
       <ListPageShell
         isLoading={isLoading}
         isEmpty={items.length === 0}

@@ -29,7 +29,7 @@ export function TeamRoute() {
         error={teamQuery.error}
         resource="Team"
         onRetry={() => void teamQuery.refetch()}
-        returnTo="/teams"
+        returnTo="/settings?tab=teams"
         returnLabel="Return to Teams"
       />
     )
@@ -42,7 +42,7 @@ export function TeamRoute() {
         error={new ApiError(404, 'Team not found')}
         resource="Team"
         onRetry={() => void teamQuery.refetch()}
-        returnTo="/teams"
+        returnTo="/settings?tab=teams"
         returnLabel="Return to Teams"
       />
     )
