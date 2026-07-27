@@ -16,7 +16,6 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { formatDate } from '@/lib/formatDate'
-import { GemTypeEditor } from './components/GemTypeEditor'
 import { GithubRepositoryBindings } from './components/GithubRepositoryBindings'
 import { GoalCard, CreateGoalForm } from '@/features/goals'
 import { toast } from 'sonner'
@@ -182,9 +181,9 @@ export function ProjectRoute() {
         </CardContent>
       </Card>
 
-      <GemTypeEditor projectId={project.id} gemType={project.gemType ?? null} editable={canManageProjects} />
-
-      <GithubRepositoryBindings projectId={project.id} editable={canManageProjects} />
+      <div className="flex flex-wrap gap-2">
+        <GithubRepositoryBindings projectId={project.id} editable={canManageProjects} />
+      </div>
 
       <div className="space-y-3">
         <p className="text-sm font-medium text-muted-foreground">Goals</p>
@@ -212,23 +211,21 @@ export function ProjectRoute() {
           </Card>
         ))}
         {!goalsQuery.isError && (
-          <>
-            <div className="flex flex-wrap gap-2">
-              <CreateGoalForm
-                fixedProjectId={project.id}
-                creating={createGoalMutation.isPending}
-                onCreate={async (input) => {
-                  try {
-                    await createGoalMutation.mutateAsync({ ...input, projectId: project.id })
-                    toast.success('Goal created')
-                  } catch {
-                    // handled by the global mutation error toast
-                  }
-                }}
-              />
-            </div>
+          <div className="flex flex-wrap items-start gap-2">
+            <CreateGoalForm
+              fixedProjectId={project.id}
+              creating={createGoalMutation.isPending}
+              onCreate={async (input) => {
+                try {
+                  await createGoalMutation.mutateAsync({ ...input, projectId: project.id })
+                  toast.success('Goal created')
+                } catch {
+                  // handled by the global mutation error toast
+                }
+              }}
+            />
             <ProjectGoalCsvImport projectId={project.id} />
-          </>
+          </div>
         )}
       </div>
 

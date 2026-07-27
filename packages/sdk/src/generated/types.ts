@@ -971,18 +971,6 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
-        CreateGemTypeInput: {
-            name: string;
-            icon: string;
-            color: string;
-            description?: string;
-        };
-        UpdateGemTypeInput: {
-            name?: string;
-            icon?: string;
-            color?: string;
-            description?: string | null;
-        };
         Project: {
             id: string;
             tenantId: string;
@@ -993,20 +981,19 @@ export interface components {
             archivedAt?: string | null;
             /** Format: date-time */
             createdAt: string;
+            /** @description Always present for projects created/loaded through the API — gems are on by default with a fixed type. */
             gemType?: components["schemas"]["GemType"] | null;
         };
         CreateProjectInput: {
             name: string;
             teamId?: string | null;
             color?: string | null;
-            gemType?: components["schemas"]["CreateGemTypeInput"];
         };
         UpdateProjectInput: {
             name?: string;
             teamId?: string | null;
             color?: string | null;
             archived?: boolean;
-            gemType?: components["schemas"]["UpdateGemTypeInput"];
         };
         /** @enum {string} */
         ProjectFeedProvenance: "human" | "github" | "ai" | "system";
@@ -1286,7 +1273,7 @@ export interface components {
             source: components["schemas"]["ProjectEventSource"];
             /** @description Provider-neutral event kind (e.g. NOTE_CREATED, GITHUB_PUSH, PROJECT_UPDATE) */
             kind: string;
-            /** @description Idempotency key within (projectId, source). GitHub uses github:{deliveryId}:{event}:{entityId}:{action} */
+            /** @description Idempotency key within (projectId, source). GitHub uses github:{githubDeliveryId}:{event}:{entityId}:{action} */
             externalId: string;
             title?: string | null;
             body?: string | null;
@@ -3163,6 +3150,24 @@ export interface operations {
                     "application/json": {
                         status?: string;
                     };
+                };
+            };
+            /** @description Malformed webhook request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid webhook signature */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

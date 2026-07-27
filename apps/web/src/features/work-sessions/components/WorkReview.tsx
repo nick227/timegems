@@ -7,12 +7,11 @@ import { NoteList } from './NoteList'
 import { formatDuration } from '../lib/formatDuration'
 
 type Note = components['schemas']['Note']
-type GemType = components['schemas']['GemType']
 
 interface WorkReviewProps {
+  sessionName: string
   elapsedSeconds: number
   projectName?: string | null
-  gemType: GemType | null
   carryInSec: number
   notes: Note[]
   onSave: (note: string) => Promise<void>
@@ -23,9 +22,9 @@ interface WorkReviewProps {
 }
 
 export function WorkReview({
+  sessionName,
   elapsedSeconds,
   projectName,
-  gemType,
   carryInSec,
   notes,
   onSave,
@@ -39,12 +38,13 @@ export function WorkReview({
   return (
     <div className="min-h-screen px-4 py-10 max-w-xl mx-auto space-y-6">
       <div className="space-y-1">
+        <h1 className="text-xl font-bold tracking-tight">{sessionName}</h1>
         <p className="text-sm text-muted-foreground">Session summary</p>
         <p className="text-3xl font-semibold tabular-nums">{formatDuration(elapsedSeconds)}</p>
         {projectName && <p className="text-sm text-muted-foreground">{projectName}</p>}
       </div>
 
-      {gemType && <GemProgress gemType={gemType} carryInSec={carryInSec} elapsedSeconds={elapsedSeconds} />}
+      {projectName && <GemProgress carryInSec={carryInSec} elapsedSeconds={elapsedSeconds} />}
 
       <NoteList notes={notes} />
 

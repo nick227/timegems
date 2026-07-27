@@ -54,7 +54,10 @@ test('validates and imports project goals from CSV', async ({ page }) => {
   })
 
   await page.goto('/projects/e2e-project')
-  await page.getByLabel('Goal CSV file').setInputFiles({
+  const fileChooserPromise = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: 'Import goals' }).click()
+  const fileChooser = await fileChooserPromise
+  await fileChooser.setFiles({
     name: 'goals.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from(
@@ -64,8 +67,6 @@ test('validates and imports project goals from CSV', async ({ page }) => {
     ),
   })
 
-  await expect(page.getByText('goals.csv: 2 goals ready.')).toBeVisible()
-  await page.getByRole('button', { name: 'Import 2 goals' }).click()
   await expect(page.getByText('2 goals imported')).toBeVisible()
   expect(importedBody).toEqual({
     goals: [

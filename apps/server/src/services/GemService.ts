@@ -1,4 +1,5 @@
 import { db, Prisma } from '@timegems/db'
+import { DEFAULT_GEM } from '../lib/defaultGem'
 
 const SECONDS_PER_GEM = 3600
 const TRANSACTION_OPTIONS = { maxWait: 5_000, timeout: 30_000 }
@@ -34,6 +35,14 @@ export class GemService {
     )
   }
 
+  // Gems are always on. Older projects may lack a GemType row — create the
+  // fixed default in-transaction before awarding.
+  private async requireGemType(tx: TransactionClient, projectId: string) {
+    const existing = await tx.gemType.findUnique({ where: { projectId } })
+    if (existing) return existing
+    return tx.gemType.create({ data: { projectId, ...DEFAULT_GEM } })
+  }
+
   // Fast path for the normal append-only case. WorkSessionService invokes
   // this inside the same transaction that marks the session STOPPED, so the
   // session, ledger entry, balance, carry, and active-session release either
@@ -50,7 +59,11 @@ export class GemService {
       where: { id: session.projectId },
       include: { gemType: true },
     })
-    if (!project?.gemType) return null
+    if (!project) return null
+    const gemType = project.gemType ?? (await this.requireGemType(tx, session.projectId))
+    // Rebuild the included shape so the rest of this method can keep using
+    // project.gemType without a second branch.
+    project.gemType = gemType
 
     const persistedSession = await tx.workSession.findUniqueOrThrow({
       where: { id: session.id },
@@ -154,15 +167,13 @@ export class GemService {
   }
 
   private async rebuildLocked(tx: TransactionClient, userId: string, projectId: string) {
-    const project = await tx.project.findUnique({
-      where: { id: projectId },
-      include: { gemType: true },
-    })
-    if (!project?.gemType) {
+    const project = await tx.project.findUnique({ where: { id: projectId } })
+    if (!project) {
       await tx.gemLedgerEntry.deleteMany({ where: { userId, projectId } })
       await tx.gemBalance.deleteMany({ where: { userId, projectId } })
       return
     }
+    const gemType = await this.requireGemType(tx, projectId)
 
     const sessions = await tx.workSession.findMany({
       where: { userId, projectId, status: 'STOPPED' },
@@ -182,7 +193,7 @@ export class GemService {
         userId,
         projectId,
         workSessionId: session.id,
-        gemTypeId: project.gemType.id,
+        gemTypeId: gemType.id,
         activeDurationSec: session.activeDurationSec,
         carryInSec: carry,
         carryOutSec,
@@ -201,7 +212,7 @@ export class GemService {
       data: {
         userId,
         projectId,
-        gemTypeId: project.gemType.id,
+        gemTypeId: gemType.id,
         totalGems,
         carrySec: carry,
       },

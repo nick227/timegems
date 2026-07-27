@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/Card'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
@@ -11,8 +11,10 @@ import {
   useDisconnectGithubInstallation,
 } from '@timegems/sdk'
 import { toast } from 'sonner'
+import { GITHUB_RETURN_KEY, githubInstallUrl } from '@/features/integrations'
 
 export function IntegrationsRoute() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const installationId = searchParams.get('installation_id')
 
@@ -22,27 +24,27 @@ export function IntegrationsRoute() {
 
   const installations = installationsData?.data ?? []
 
-  // Handle GitHub installation callback
   useEffect(() => {
-    if (installationId) {
-      const register = async () => {
-        try {
-          await registerMutation.mutateAsync({ installationId })
-          toast.success('GitHub App connected successfully')
-          await refetch()
-        } catch (err: any) {
-          toast.error(err.message || 'Failed to connect GitHub App')
-        } finally {
-          // Clear query params to prevent double submission
-          setSearchParams({})
+    if (!installationId) return
+    const register = async () => {
+      try {
+        await registerMutation.mutateAsync({ installationId })
+        toast.success('GitHub App connected successfully')
+        await refetch()
+        const returnTo = sessionStorage.getItem(GITHUB_RETURN_KEY)
+        sessionStorage.removeItem(GITHUB_RETURN_KEY)
+        if (returnTo?.startsWith('/')) {
+          navigate(returnTo, { replace: true })
+          return
         }
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : 'Failed to connect GitHub App')
+      } finally {
+        setSearchParams({})
       }
-      void register()
     }
+    void register()
   }, [installationId])
-
-  const appName = import.meta.env.VITE_GITHUB_APP_NAME || 'timegems-dev'
-  const githubInstallUrl = `https://github.com/apps/${appName}/installations/new`
 
   async function handleDisconnect(instId: string) {
     try {
@@ -57,7 +59,6 @@ export function IntegrationsRoute() {
     <div className="max-w-xl mx-auto px-4 py-6 space-y-4">
       <PageHeader title="Integrations" />
 
-      {/* Google Integration (Core Auth) */}
       <Card>
         <CardContent className="py-3 flex items-center gap-3">
           <CheckCircle2 size={18} className="text-emerald-500" />
@@ -68,7 +69,6 @@ export function IntegrationsRoute() {
         </CardContent>
       </Card>
 
-      {/* GitHub Integration */}
       <Card>
         <CardContent className="py-4 space-y-4">
           <div className="flex items-center gap-3">
@@ -76,7 +76,7 @@ export function IntegrationsRoute() {
             <div className="flex-1">
               <p className="text-sm font-medium">GitHub</p>
               <p className="text-xs text-muted-foreground">
-                Bind repositories to projects to sync commits, pull requests, issues, and deploys.
+                Connect an account, then bind repositories from a project page.
               </p>
             </div>
           </div>
@@ -123,7 +123,7 @@ export function IntegrationsRoute() {
                   </div>
                   <Button
                     onClick={() => {
-                      window.location.href = githubInstallUrl
+                      window.location.href = githubInstallUrl()
                     }}
                     variant="outline"
                     size="sm"
@@ -136,12 +136,12 @@ export function IntegrationsRoute() {
                 <div className="pt-2">
                   <Button
                     onClick={() => {
-                      window.location.href = githubInstallUrl
+                      window.location.href = githubInstallUrl()
                     }}
                     className="w-full flex items-center justify-center gap-2"
                   >
                     <Github size={16} />
-                    Install GitHub App
+                    Connect GitHub
                   </Button>
                 </div>
               )}
@@ -150,7 +150,6 @@ export function IntegrationsRoute() {
         </CardContent>
       </Card>
 
-      {/* Discord (Static) */}
       <Card>
         <CardContent className="py-3 flex items-center gap-3 opacity-60">
           <Circle size={18} className="text-muted-foreground" />

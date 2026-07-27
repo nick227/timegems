@@ -262,23 +262,6 @@ components:
         description: { type: [string, 'null'] }
         createdAt: { type: string, format: date-time }
 
-    CreateGemTypeInput:
-      type: object
-      required: [name, icon, color]
-      properties:
-        name: { type: string, minLength: 1, maxLength: 50 }
-        icon: { type: string, minLength: 1, maxLength: 50 }
-        color: { type: string, minLength: 1, maxLength: 20 }
-        description: { type: string, maxLength: 500 }
-
-    UpdateGemTypeInput:
-      type: object
-      properties:
-        name: { type: string, minLength: 1, maxLength: 50 }
-        icon: { type: string, minLength: 1, maxLength: 50 }
-        color: { type: string, minLength: 1, maxLength: 20 }
-        description: { type: [string, 'null'], maxLength: 500 }
-
     Project:
       type: object
       required: [id, tenantId, name, createdAt]
@@ -294,6 +277,7 @@ components:
           oneOf:
             - $ref: '#/components/schemas/GemType'
             - type: 'null'
+          description: Always present for projects created/loaded through the API — gems are on by default with a fixed type.
 
     CreateProjectInput:
       type: object
@@ -302,7 +286,6 @@ components:
         name: { type: string, minLength: 1, maxLength: 100 }
         teamId: { type: [string, 'null'] }
         color: { type: [string, 'null'] }
-        gemType: { $ref: '#/components/schemas/CreateGemTypeInput' }
 
     UpdateProjectInput:
       type: object
@@ -311,7 +294,6 @@ components:
         teamId: { type: [string, 'null'] }
         color: { type: [string, 'null'] }
         archived: { type: boolean }
-        gemType: { $ref: '#/components/schemas/UpdateGemTypeInput' }
 
     ProjectFeedProvenance:
       type: string

@@ -137,7 +137,6 @@ export function WorkSessionRoute() {
     (g) => !g.projectId || g.projectId === session.projectId,
   )
 
-  const gemType = session.project?.gemType ?? null
   const gemBalance = gemBalancesData?.data.find((b) => b.projectId === session.projectId)
   const carryInSec = gemBalance?.carrySec ?? 0
   const teamId = session.project?.teamId ?? undefined
@@ -197,7 +196,6 @@ export function WorkSessionRoute() {
         sessionName={session.name}
         elapsedSeconds={elapsedSeconds}
         projectName={session.project?.name}
-        gemType={gemType}
         carryInSec={carryInSec}
         notes={notes}
         saving={stopMutation.isPending}
@@ -241,7 +239,6 @@ export function WorkSessionRoute() {
       isPaused={session.status === 'PAUSED'}
       elapsedSeconds={elapsedSeconds}
       startedAt={session.startedAt}
-      gemType={gemType}
       carryInSec={carryInSec}
       onPause={() => pauseMutation.mutate(session.id)}
       onResume={() => resumeMutation.mutate(session.id)}

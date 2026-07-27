@@ -1,10 +1,8 @@
-import { useState } from 'react'
-import { Download, Upload } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Upload } from 'lucide-react'
 import { useImportProjectGoals } from '@timegems/sdk'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/Button'
-import { Field } from '@/components/ui/Field'
-import { Input } from '@/components/ui/Input'
 
 type ImportedGoal = {
   title: string
@@ -15,10 +13,6 @@ type ImportedGoal = {
 
 const MAX_FILE_BYTES = 1_000_000
 const MAX_GOALS = 500
-const TEMPLATE = `title,description,complexityScore,estimatedHours
-"Ship onboarding","Define and deliver the first-run experience",3,12
-"Measure activation","Add the core activation event and dashboard",2,6
-`
 
 function parseCsvRows(source: string) {
   const rows: string[][] = []
@@ -105,78 +99,64 @@ function parseProjectGoalsCsv(source: string): { goals: ImportedGoal[]; errors: 
   return { goals, errors }
 }
 
-function downloadTemplate() {
-  const url = URL.createObjectURL(new Blob([TEMPLATE], { type: 'text/csv;charset=utf-8' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = 'project-goals-template.csv'
-  link.click()
-  URL.revokeObjectURL(url)
-}
-
+// One button: pick a CSV → parse → import immediately. Status text covers
+// "importing…" feedback; toast confirms the result.
 export function ProjectGoalCsvImport({ projectId }: { projectId: string }) {
   const importGoals = useImportProjectGoals(projectId)
-  const [goals, setGoals] = useState<ImportedGoal[]>([])
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [status, setStatus] = useState<string | null>(null)
   const [errors, setErrors] = useState<string[]>([])
-  const [fileName, setFileName] = useState('')
-  const [inputKey, setInputKey] = useState(0)
 
-  async function selectFile(file?: File) {
-    setGoals([])
+  async function handleFile(file?: File) {
     setErrors([])
-    setFileName(file?.name ?? '')
+    setStatus(null)
     if (!file) return
     if (file.size > MAX_FILE_BYTES) {
       setErrors(['The CSV file must be smaller than 1 MB.'])
       return
     }
+
     try {
       const parsed = parseProjectGoalsCsv(await file.text())
-      setGoals(parsed.goals)
-      setErrors(parsed.errors)
-    } catch (error) {
-      setErrors([error instanceof Error ? error.message : 'The CSV could not be read.'])
-    }
-  }
-
-  async function handleImport() {
-    if (goals.length === 0 || errors.length > 0) return
-    try {
-      const result = await importGoals.mutateAsync(goals)
+      if (parsed.errors.length > 0) {
+        setErrors(parsed.errors)
+        return
+      }
+      setStatus(`Importing ${parsed.goals.length} ${parsed.goals.length === 1 ? 'goal' : 'goals'}…`)
+      const result = await importGoals.mutateAsync(parsed.goals)
+      setStatus(null)
       toast.success(`${result.data.imported} ${result.data.imported === 1 ? 'goal' : 'goals'} imported`)
-      setGoals([])
-      setFileName('')
-      setInputKey((current) => current + 1)
-    } catch {
-      // handled by the global mutation error toast
+    } catch (error) {
+      setStatus(null)
+      if (error instanceof Error && !(error as { status?: number }).status) {
+        setErrors([error.message])
+      }
+      // API failures are handled by the global mutation error toast
+    } finally {
+      if (inputRef.current) inputRef.current.value = ''
     }
   }
 
   return (
-    <div className="space-y-3 rounded-lg bg-surface p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-medium">Import goals from CSV</p>
-          <p className="text-xs text-muted-foreground">
-            Columns: title, description, complexityScore (1–5), estimatedHours.
-          </p>
-        </div>
-        <Button size="sm" variant="ghost" onClick={downloadTemplate}>
-          <Download size={14} />
-          Template
-        </Button>
-      </div>
-
-      <Field label="Goal CSV file">
-        <Input
-          key={inputKey}
-          type="file"
-          accept=".csv,text/csv"
-          voice={false}
-          onChange={(event) => void selectFile(event.target.files?.[0])}
-        />
-      </Field>
-
+    <div className="space-y-2">
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".csv,text/csv"
+        className="sr-only"
+        aria-label="Import goals CSV"
+        onChange={(event) => void handleFile(event.target.files?.[0])}
+      />
+      <Button
+        size="sm"
+        variant="outline"
+        loading={importGoals.isPending}
+        onClick={() => inputRef.current?.click()}
+      >
+        <Upload size={14} />
+        Import goals
+      </Button>
+      {status && <p className="text-sm text-muted-foreground">{status}</p>}
       {errors.length > 0 && (
         <div role="alert" className="space-y-1 text-sm text-destructive">
           {errors.slice(0, 5).map((error) => (
@@ -185,21 +165,6 @@ export function ProjectGoalCsvImport({ projectId }: { projectId: string }) {
           {errors.length > 5 && <p>And {errors.length - 5} more errors.</p>}
         </div>
       )}
-      {goals.length > 0 && errors.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          {fileName}: {goals.length} {goals.length === 1 ? 'goal' : 'goals'} ready.
-        </p>
-      )}
-
-      <Button
-        size="sm"
-        loading={importGoals.isPending}
-        disabled={goals.length === 0 || errors.length > 0}
-        onClick={() => void handleImport()}
-      >
-        <Upload size={14} />
-        Import {goals.length || ''} {goals.length === 1 ? 'goal' : 'goals'}
-      </Button>
     </div>
   )
 }

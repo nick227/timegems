@@ -15,14 +15,13 @@ import { formatTime } from '../lib/formatTime'
 type Project = components['schemas']['Project']
 type Goal = components['schemas']['Goal']
 type Note = components['schemas']['Note']
-type GemType = components['schemas']['GemType']
 
 interface WorkActiveProps {
   workSessionId: string
+  sessionName: string
   isPaused: boolean
   elapsedSeconds: number
   startedAt: string
-  gemType: GemType | null
   carryInSec: number
   onPause: () => void
   onResume: () => void
@@ -47,10 +46,10 @@ interface WorkActiveProps {
 
 export function WorkActive({
   workSessionId,
+  sessionName,
   isPaused,
   elapsedSeconds,
   startedAt,
-  gemType,
   carryInSec,
   onPause,
   onResume,
@@ -82,6 +81,8 @@ export function WorkActive({
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-lg space-y-6 px-4 py-6">
+
+        <h1 className="text-center text-xl font-bold tracking-tight">{sessionName}</h1>
 
         <div className="w-full flex gap-4">
           <h6>Online</h6>
@@ -115,9 +116,9 @@ export function WorkActive({
           </Button>
         </div>
 
-        {gemType && (
+        {activeProjectId && (
           <div className="mx-auto w-full max-w-sm pt-1">
-            <GemProgress gemType={gemType} carryInSec={carryInSec} elapsedSeconds={elapsedSeconds} />
+            <GemProgress carryInSec={carryInSec} elapsedSeconds={elapsedSeconds} />
           </div>
         )}
       </section>

@@ -32,7 +32,7 @@ describe('createProject', () => {
     expect(res.statusCode).toBe(401)
   })
 
-  it('POST /projects', async () => {
+  it('POST /projects — gems are on by default', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/projects',
@@ -41,19 +41,7 @@ describe('createProject', () => {
     })
     expect(res.statusCode).toBe(201)
     await validateResponse('createProject', 201, res.json())
-    expect(res.json().data.gemType).toBeNull()
-  })
-
-  it('POST /projects — with a gem type', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/projects',
-      headers: asAuth(testUserId),
-      payload: { name: 'Website Redesign', gemType: { name: 'Ruby', icon: 'gem', color: '#f00' } },
-    })
-    expect(res.statusCode).toBe(201)
-    await validateResponse('createProject', 201, res.json())
-    expect(res.json().data.gemType).toMatchObject({ name: 'Ruby', icon: 'gem', color: '#f00' })
+    expect(res.json().data.gemType).toMatchObject({ name: 'Gem', icon: '💎', color: '#6366f1' })
   })
 
   it('forbids ordinary members from creating projects', async () => {
@@ -128,7 +116,7 @@ describe('updateProject', () => {
     expect(res.json().data.archivedAt).not.toBeNull()
   })
 
-  it('adding a gem type retroactively awards gems for past sessions', async () => {
+  it('backfills a default gem type and awards past sessions on first read', async () => {
     const project = await db.project.create({ data: { tenantId: testTenantId, name: 'Website Redesign' } })
     await db.workSession.create({
       data: {
@@ -141,13 +129,12 @@ describe('updateProject', () => {
       },
     })
     const res = await app.inject({
-      method: 'PATCH',
+      method: 'GET',
       url: `/projects/${project.id}`,
       headers: asAuth(testUserId),
-      payload: { gemType: { name: 'Ruby', icon: 'gem', color: '#f00' } },
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json().data.gemType).toMatchObject({ name: 'Ruby' })
+    expect(res.json().data.gemType).toMatchObject({ name: 'Gem', icon: '💎', color: '#6366f1' })
 
     const balance = await db.gemBalance.findFirst({ where: { userId: testUserId, projectId: project.id } })
     expect(balance?.totalGems).toBe(1)

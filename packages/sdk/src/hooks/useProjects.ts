@@ -31,12 +31,10 @@ export function useProject(projectId: string) {
   })
 }
 
-type GemTypeInput = { name: string; icon: string; color: string; description?: string }
-
 export function useCreateProject() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (body: { name: string; teamId?: string | null; color?: string | null; gemType?: GemTypeInput }) => {
+    mutationFn: async (body: { name: string; teamId?: string | null; color?: string | null }) => {
       const { data, error, response } = await getApiClient().POST('/projects', { body })
       if (error) throw new ApiError(response.status, (error as any).error)
       return data!
@@ -55,7 +53,6 @@ export function useUpdateProject(projectId: string) {
       teamId?: string | null
       color?: string | null
       archived?: boolean
-      gemType?: Partial<GemTypeInput>
     }) => {
       const { data, error, response } = await getApiClient().PATCH('/projects/{projectId}', {
         params: { path: { projectId } },

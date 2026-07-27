@@ -23,7 +23,7 @@ export function GemBank() {
   }
 
   if (balances.length === 0) {
-    return <EmptyState icon={Gem} title="No gems yet" description="Projects with a gem type earn you gems as you work." />
+    return <EmptyState icon={Gem} title="No gems yet" description="Earn gems as you work on projects." />
   }
 
   return (
@@ -31,13 +31,14 @@ export function GemBank() {
       {balances.map((balance) => (
         <Card key={`${balance.projectId}-${balance.gemType.id}`}>
           <CardContent className="py-3 flex items-center gap-3">
-            <GemBadge icon={balance.gemType.icon} color={balance.gemType.color} />
+            <GemBadge />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{balance.projectName}</p>
-              <p className="text-xs text-muted-foreground">
-                {balance.gemType.name}
-                {balance.carrySec > 0 && ` · ${Math.floor((3600 - balance.carrySec) / 60)}m to next`}
-              </p>
+              {balance.carrySec > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {Math.floor((3600 - balance.carrySec) / 60)}m to next gem
+                </p>
+              )}
             </div>
             <span className="text-lg font-semibold tabular-nums">{balance.totalGems}</span>
           </CardContent>

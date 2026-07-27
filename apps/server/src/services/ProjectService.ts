@@ -2,17 +2,33 @@ import { db } from '@timegems/db'
 import { cursorOrderBy, cursorWhere, decodeCursor, normalizeLimit, paginate } from '../lib/pagination'
 import { GemService } from './GemService'
 import { HttpError } from '../lib/errors'
-import { sanitizeRichText } from '../lib/sanitizeHtml'
+import { DEFAULT_GEM } from '../lib/defaultGem'
 
 const gemService = new GemService()
-
-type GemTypeInput = { name: string; icon: string; color: string; description?: string }
-type UpdateGemTypeInput = { name?: string; icon?: string; color?: string; description?: string | null }
 
 export class ProjectService {
   private async requireTeamInTenant(tenantId: string, teamId: string) {
     const team = await db.team.findFirst({ where: { id: teamId, tenantId }, select: { id: true } })
     if (!team) throw new HttpError(404, 'Team not found')
+  }
+
+  // Older projects may predate always-on gems. Creating the default type and
+  // recomputing means past stopped sessions start counting the moment the
+  // project is touched again — same retroactive rule the old "set gem type"
+  // PATCH used to own.
+  private async ensureDefaultGemType(project: {
+    id: string
+    gemType: { id: string } | null
+  }) {
+    if (project.gemType) return project
+    await db.gemType.create({
+      data: { projectId: project.id, ...DEFAULT_GEM },
+    })
+    await gemService.recomputeAllUsersForProject(project.id)
+    return db.project.findUniqueOrThrow({
+      where: { id: project.id },
+      include: { gemType: true },
+    })
   }
 
   async list(
@@ -37,7 +53,7 @@ export class ProjectService {
     return paginate(projects, limit)
   }
 
-  async create(tenantId: string, data: { name: string; teamId?: string | null; color?: string | null; gemType?: GemTypeInput }) {
+  async create(tenantId: string, data: { name: string; teamId?: string | null; color?: string | null }) {
     if (data.teamId) await this.requireTeamInTenant(tenantId, data.teamId)
 
     return db.project.create({
@@ -46,16 +62,7 @@ export class ProjectService {
         name: data.name,
         teamId: data.teamId ?? null,
         color: data.color ?? null,
-        ...(data.gemType
-          ? {
-              gemType: {
-                create: {
-                  ...data.gemType,
-                  description: data.gemType.description ? sanitizeRichText(data.gemType.description) : data.gemType.description,
-                },
-              },
-            }
-          : {}),
+        gemType: { create: { ...DEFAULT_GEM } },
       },
       include: { gemType: true },
     })
@@ -64,7 +71,7 @@ export class ProjectService {
   async get(tenantId: string, projectId: string) {
     const project = await db.project.findFirst({ where: { id: projectId, tenantId }, include: { gemType: true } })
     if (!project) throw new HttpError(404, 'Project not found')
-    return project
+    return this.ensureDefaultGemType(project)
   }
 
   async update(
@@ -75,13 +82,12 @@ export class ProjectService {
       teamId?: string | null
       color?: string | null
       archived?: boolean
-      gemType?: UpdateGemTypeInput
     },
   ) {
-    const existing = await this.get(tenantId, projectId)
-    const { archived, gemType, ...rest } = data
-    if (rest.teamId) await this.requireTeamInTenant(tenantId, rest.teamId)
+    await this.get(tenantId, projectId)
+    if (data.teamId) await this.requireTeamInTenant(tenantId, data.teamId)
 
+    const { archived, ...rest } = data
     await db.project.update({
       where: { id: projectId },
       data: {
@@ -89,21 +95,6 @@ export class ProjectService {
         ...(archived !== undefined ? { archivedAt: archived ? new Date() : null } : {}),
       },
     })
-
-    if (gemType) {
-      const description = gemType.description ? sanitizeRichText(gemType.description) : gemType.description
-      if (existing.gemType) {
-        await db.gemType.update({ where: { projectId }, data: { ...gemType, description } })
-      } else if (gemType.name && gemType.icon && gemType.color) {
-        await db.gemType.create({
-          data: { projectId, name: gemType.name, icon: gemType.icon, color: gemType.color, description },
-        })
-      } else {
-        throw new HttpError(400, 'name, icon, and color are required to create a gem type')
-      }
-      // Retroactive: past sessions on this project now count toward gems too.
-      await gemService.recomputeAllUsersForProject(projectId)
-    }
 
     return this.get(tenantId, projectId)
   }
