@@ -30,7 +30,9 @@ test.describe('auth guard', () => {
 
   test('login page renders Google, email, and guest entry points', async ({ page }) => {
     await page.goto('/login')
-    await expect(page.getByRole('heading', { name: 'TimeGems' })).toBeVisible()
+    // /login is inside Shell now -- AuthGuard may auto-provision a guest
+    // first, then the Sign in page renders under the same chrome.
+    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
     // The Google widget itself only mounts with real OAuth credentials (not
     // configured in dev/CI) -- assert on the stable slot it renders into
     // instead of copy text.

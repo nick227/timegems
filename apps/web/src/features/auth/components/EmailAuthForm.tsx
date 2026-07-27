@@ -61,7 +61,7 @@ export function EmailAuthForm({ redirectTo = '/' }: { redirectTo?: string }) {
       )}
 
       <Button type="submit" className="w-full" loading={mutation.isPending}>
-        {mode === 'login' ? 'Sign in' : 'Create account'}
+        {mode === 'login' ? 'Sign in' : 'Register'}
       </Button>
 
       <button
@@ -73,7 +73,7 @@ export function EmailAuthForm({ redirectTo = '/' }: { redirectTo?: string }) {
         }}
         className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
-        {mode === 'login' ? "Don't have an account? Create one" : 'Already have an account? Sign in'}
+        {mode === 'login' ? "Don't have an account? Register" : 'Already have an account? Sign in'}
       </button>
     </form>
   )

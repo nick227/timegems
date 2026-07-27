@@ -9,9 +9,9 @@ import { AlertTriangle, ShieldAlert } from 'lucide-react'
 // A 401 with no session at all no longer means "send them to /login" -- it
 // means "give them an instant guest account," so the very first thing an
 // unauthenticated visitor sees is the app itself, not a sign-in screen.
-// /login still exists (see App.tsx: it's a sibling route, outside this
-// guard) as an explicit destination for someone who wants to sign into an
-// *existing* account instead of getting a new anonymous one.
+// /login still exists (inside Shell, see App.tsx) as an explicit destination
+// for someone who wants to sign into an *existing* account instead of
+// keeping the auto-provisioned guest.
 export function AuthGuard() {
   const authQuery = useCurrentUser()
   const { data, isLoading } = authQuery

@@ -3,14 +3,13 @@ import { useGoogleAuth } from '@timegems/sdk'
 import { GoogleLoginButton } from './components/GoogleLoginButton'
 import { EmailAuthForm } from './components/EmailAuthForm'
 
-// This is an opt-in destination now, not the default landing for a new
-// visitor -- AuthGuard auto-provisions an instant guest account for anyone
-// unauthenticated who lands on a protected route, so most people never see
-// this page at all. It exists for someone who specifically wants to sign
-// into an *existing* account (Google or email) instead of getting a new
-// guest identity, which is also why "Continue as a guest instead" is here:
-// it's the way back to that zero-friction path for someone who followed a
-// link here without meaning to.
+// Opt-in destination for signing into an *existing* account (or registering
+// a new one), nested under Shell like every other app page. AuthGuard
+// auto-provisions a guest for anyone unauthenticated, so most people never
+// land here -- Settings' ClaimAccountCard is the in-place path for guests
+// who want to keep their current identity. "Continue as a guest instead"
+// is the way back to Work for someone who followed a link here without
+// meaning to.
 export function LoginRoute() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -19,11 +18,15 @@ export function LoginRoute() {
   const googleAuth = useGoogleAuth()
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-10">
-      <div className="w-full max-w-xs space-y-8 text-center">
+    <div className="mx-auto flex w-full max-w-xs flex-col items-center px-4 py-10 text-center">
+      <div className="w-full space-y-8">
         <div className="space-y-1">
-          <h1 className="text-4xl font-bold tracking-tight">TimeGems</h1>
-          {state?.message && <p className="text-sm text-muted-foreground">{state.message}</p>}
+          <h1 className="text-2xl font-bold tracking-tight">Sign in</h1>
+          {state?.message ? (
+            <p className="text-sm text-muted-foreground">{state.message}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Use an existing account, or register a new one.</p>
+          )}
         </div>
 
         <GoogleLoginButton

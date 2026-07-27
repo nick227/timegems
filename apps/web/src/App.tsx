@@ -31,17 +31,15 @@ export function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public */}
-        <Route path="/login" element={withBoundary(<LoginRoute />)} />
-
-        {/* Protected — no drawer, no nav list. Work is the index route;
-            everything else (Projects, Teams, Agent Reports, Activity,
-            Admin) lives as a tab inside /settings (see SettingsRoute) now
-            that there's nowhere else for a nav link to live. Detail pages
-            for individual entities stay real routes of their own. */}
+        {/* AuthGuard auto-provisions a guest for anyone with no session, so
+            /login lives inside Shell like every other page -- same chrome,
+            same presence, no orphan full-screen auth layout. Guests who want
+            to keep their current identity use Settings' ClaimAccountCard
+            instead; /login is the explicit "switch / create account" path. */}
         <Route element={<AuthGuard />}>
           <Route element={<Shell />}>
             <Route index element={withBoundary(<WorkIndexRoute />)} />
+            <Route path="/login" element={withBoundary(<LoginRoute />)} />
             <Route path="/work/:workSessionId" element={withBoundary(<WorkSessionRoute />)} />
             <Route path="/projects/:projectId" element={withBoundary(<ProjectRoute />)} />
             <Route path="/teams/:teamId" element={withBoundary(<TeamRoute />)} />
