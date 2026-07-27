@@ -1,19 +1,23 @@
 import { useState } from 'react'
 import { SmartTextEditor } from '@/components/ui/smart-text-editor'
+import { Button } from '@/components/ui/Button'
+import { stripHtml } from '@/lib/stripHtml'
 
 interface NoteComposerProps {
   onAdd: (body: string) => Promise<void>
   loading: boolean
   recentTexts?: string[]
   teamId?: string
+  /** Identifies this session for draft recovery -- see SmartTextEditor's persistKey. */
+  workSessionId?: string
 }
 
-// The fastest possible capture gesture: rich text (headings/links/lists/
-// media/mentions/AI-assist/voice all live in SmartTextEditor itself), Enter
-// saves and clears without ever leaving the field -- no separate "Add"
-// button to notice, aim for, or wait on.
-export function NoteComposer({ onAdd, loading, recentTexts, teamId }: NoteComposerProps) {
+// Rich-text capture with Enter or the minimal Post button; SmartTextEditor
+// owns headings/links/lists/media/mentions/AI-assist/voice.
+export function NoteComposer({ onAdd, loading, recentTexts, teamId, workSessionId }: NoteComposerProps) {
   const [draft, setDraft] = useState('')
+  const hasContent = stripHtml(draft).length > 0 || /<(img|video|audio)\b/i.test(draft)
+  const canSubmit = hasContent && !loading
 
   async function submit(html?: string) {
     if (loading) return
@@ -33,26 +37,38 @@ export function NoteComposer({ onAdd, loading, recentTexts, teamId }: NoteCompos
   }
 
   return (
-    <SmartTextEditor
-      value={draft}
-      onChange={setDraft}
-      onSubmit={submit}
-      disabled={loading}
-      // Not the DOM autofocus attribute -- SmartTextEditor's own `autoFocus`
-      // prop maps to Tiptap's `autofocus: 'end'` editor option (put the
-      // cursor at the end of existing content on init). jsx-a11y's rule
-      // matches the JSX attribute name on any element, custom or native, so
-      // it can't tell the two apart here.
-      // eslint-disable-next-line jsx-a11y/no-autofocus
-      autoFocus
-      placeholder="Quick project updates"
-      // No visible label by design -- this is the "fastest possible capture
-      // gesture" (see file header), a stacked label would fight that. The
-      // placeholder itself doubles as the accessible name here.
-      aria-label="Project updates"
-      suggestionContext="progress"
-      recentTexts={recentTexts}
-      teamId={teamId}
-    />
+    <div className="space-y-2">
+      <SmartTextEditor
+        value={draft}
+        onChange={setDraft}
+        onSubmit={submit}
+        disabled={loading}
+        // Not the DOM autofocus attribute -- SmartTextEditor's own `autoFocus`
+        // prop maps to Tiptap's `autofocus: 'end'` editor option (put the
+        // cursor at the end of existing content on init). jsx-a11y's rule
+        // matches the JSX attribute name on any element, custom or native, so
+        // it can't tell the two apart here.
+        // eslint-disable-next-line jsx-a11y/no-autofocus
+        autoFocus
+        placeholder="Quick project updates"
+        aria-label="Project updates"
+        suggestionContext="progress"
+        recentTexts={recentTexts}
+        teamId={teamId}
+        persistKey={workSessionId ? `note-${workSessionId}` : undefined}
+      />
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={!canSubmit}
+          loading={loading}
+          onClick={() => void submit()}
+        >
+          Post
+        </Button>
+      </div>
+    </div>
   )
 }

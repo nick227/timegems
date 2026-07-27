@@ -25,7 +25,10 @@ export function LoginRoute() {
           {state?.message ? (
             <p className="text-sm text-muted-foreground">{state.message}</p>
           ) : (
-            <p className="text-sm text-muted-foreground">Use an existing account, or register a new one.</p>
+            <p className="text-sm text-muted-foreground">
+              Use an existing account, or register a new one -- anything you're already doing as a guest moves with
+              you.
+            </p>
           )}
         </div>
 

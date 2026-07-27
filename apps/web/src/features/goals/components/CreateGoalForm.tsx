@@ -68,7 +68,7 @@ export function CreateGoalForm({ projects, fixedProjectId, onCreate, creating }:
   }
 
   return (
-    <div className="space-y-3 rounded-lg bg-surface p-4">
+    <div className="space-y-3 rounded-lg bg-surface p-4 w-full">
       <Field label="Goal title">
         {/* Callback ref instead of the JSX `autoFocus` attribute -- see
             Toolbar.tsx's identical comment. This form only renders once the

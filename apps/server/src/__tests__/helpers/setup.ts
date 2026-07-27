@@ -30,5 +30,6 @@ afterEach(async () => {
   await db.tenant.deleteMany()
   await db.adminUser.deleteMany()
   await db.session.deleteMany()
+  await db.guestMerge.deleteMany()
   await db.user.deleteMany()
 })

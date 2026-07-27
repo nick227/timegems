@@ -4,6 +4,7 @@ import { EmailAuthService } from '../services/EmailAuthService'
 import { ProfileService } from '../services/ProfileService'
 import { db } from '@timegems/db'
 import { capabilitiesFor, type Capability } from '../lib/authorization'
+import { currentAnonymousUserId } from '../lib/currentSessionUser'
 
 const googleAuthService = new GoogleAuthService()
 const anonymousAuthService = new AnonymousAuthService()
@@ -19,7 +20,8 @@ const COOKIE = {
 }
 
 export async function googleAuth(request: any, reply: any) {
-  const { user, token } = await googleAuthService.authenticate(request.body.credential)
+  const guestUserId = await currentAnonymousUserId(request)
+  const { user, token } = await googleAuthService.authenticate(request.body.credential, guestUserId)
   reply.setCookie('token', token, COOKIE)
   return reply.send({ data: user })
 }
@@ -35,14 +37,16 @@ export async function anonymousAuth(request: any, reply: any) {
 
 export async function registerWithEmail(request: any, reply: any) {
   const { email, password, name } = request.body
-  const { user, token } = await emailAuthService.register(email, password, name)
+  const guestUserId = await currentAnonymousUserId(request)
+  const { user, token } = await emailAuthService.register(email, password, name, guestUserId)
   reply.setCookie('token', token, COOKIE)
   return reply.status(201).send({ data: user })
 }
 
 export async function loginWithEmail(request: any, reply: any) {
   const { email, password } = request.body
-  const { user, token } = await emailAuthService.login(email, password)
+  const guestUserId = await currentAnonymousUserId(request)
+  const { user, token } = await emailAuthService.login(email, password, guestUserId)
   reply.setCookie('token', token, COOKIE)
   return reply.send({ data: user })
 }

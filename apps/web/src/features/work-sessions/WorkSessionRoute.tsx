@@ -193,6 +193,7 @@ export function WorkSessionRoute() {
         <Suspense fallback={<PageSpinner />}>
         {supportingDataWarning}
         <WorkReview
+        workSessionId={session.id}
         sessionName={session.name}
         elapsedSeconds={elapsedSeconds}
         projectName={session.project?.name}

@@ -117,7 +117,7 @@ test('/settings?tab=activity exposes a recoverable load failure', async ({ page 
 
 test('/settings?tab=reports', async ({ page }) => {
   await page.goto('/settings?tab=reports')
-  await expect(page.getByRole('tab', { name: 'Agent Reports', selected: true })).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Agents', selected: true })).toBeVisible()
   await expect(page.getByText('E2E fixture report')).toBeVisible()
 })
 
@@ -137,7 +137,14 @@ test('/settings', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Account', selected: true })).toBeVisible()
   await expect(page.getByLabel('Username')).toHaveValue('E2E User')
-  await expect(page.getByText('Gem Bank')).toBeVisible()
+})
+
+test('/settings?tab=gems', async ({ page }) => {
+  await page.goto('/settings?tab=gems')
+  await expect(page.getByRole('tab', { name: 'Gems', selected: true })).toBeVisible()
+  // The e2e fixture user has no finalized (STOPPED) sessions on the gem-typed
+  // E2E Project, so the Gem Bank's real empty state is what should render.
+  await expect(page.getByText('No gems yet')).toBeVisible()
 })
 
 test('/settings?tab=admin', async ({ page }) => {

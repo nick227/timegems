@@ -3,7 +3,7 @@
 ## Entity overview
 
 - **Tenant** is the isolation boundary. Everything else (except `User` and `AdminUser`) hangs off a `tenantId`.
-- **User** is global (one Google identity); joins tenants via **Membership**.
+- **User** is global (Google identity and/or email+password); joins tenants via **Membership**. A guest (`isAnonymous: true`, auto-provisioned, no credential) resolves into a durable identity one of two ways: **claim**, an in-place upgrade of the same row (add a credential, flip `isAnonymous` false, same id, nothing to transfer), or **merge**, authenticating as a *different*, already-existing `User` row — the guest's owned rows are reassigned to that account and the guest row is retired (`deletedAt`, never hard-deleted). **GuestMerge** is the one-row-per-merge audit trail this leaves behind; see `GuestMergeService`'s docstring for the full per-model collision policy.
 - **WorkSession** is the core product artifact: one row per start→finish cycle, `status` tracks running/paused/reviewing/stopped.
 - **UserActiveSession** is a coordination row keyed by `userId` that makes the single-active-session invariant safe under concurrent requests on MySQL.
 - **WorkSessionInterval** exists because "time spent" must be exact — it's the append-only log of active/paused boundaries that a `WorkSession`'s duration is computed from, not a trusted client-side stopwatch.
@@ -40,6 +40,7 @@ Tenant 1---* ProjectEvent *---1 Project
 Tenant 1---* ProjectUpdateJob *---1 Project
 Tenant 1---* ProjectUpdate *---1 Project
 User   1---0..1 AdminUser
+User (guest) 1---0..1 GuestMerge 0..1---* User (target)
 Project 1---0..1 GemType
 WorkSession 1---0..1 GemLedgerEntry (unique per session)
 User + Project + GemType ---* GemLedgerEntry
@@ -61,11 +62,22 @@ Tenant:
 
 User:
   id: uuid
-  email: string
+  email: string?
   name: string
   avatarUrl: string?
-  googleId: string
+  googleId: string?
+  passwordHash: string?
+  isAnonymous: bool                        # true only for an auto-provisioned guest, until claimed or merged away
+  deletedAt: datetime?                      # set when this row is retired by a guest merge (see GuestMerge)
   createdAt: datetime
+
+GuestMerge:
+  id: uuid
+  guestUserId: uuid                         # unique -- a guest can be merged exactly once, ever
+  targetUserId: uuid
+  sourceTenantId: uuid?
+  finalizedSessionIds: json?                # sessions force-stopped (were still running/paused/reviewing) at merge time
+  mergedAt: datetime
 
 Membership:
   id: uuid
@@ -285,3 +297,4 @@ GemBalance:
 - `postedTo` on `AgentReport` is JSON rather than a join table because destinations are heterogeneous and low-cardinality per report; revisit if querying "all reports posted to Discord" becomes common.
 - **Why one `GemLedgerEntry` per session instead of a running counter:** a bare running total per (user, project) can't be safely reversed — if session #7 of 20 gets deleted, you can't know how much of the current total came from it without replaying. One entry per session, each snapshotting its own carry-in/carry-out, makes replay (and therefore correction/deletion) a full deterministic recompute rather than fragile incremental math.
 - **Why `GemBalance` exists at all if the ledger is authoritative:** reading "does this user have 40 gems on this project" by summing potentially thousands of ledger rows on every Work-screen render doesn't scale. `GemBalance` is a cache maintained by the same recompute that rebuilds the ledger — if it and the ledger ever disagree, the ledger wins and `GemBalance` gets rebuilt, never the reverse.
+- **Why guest merge exists as a real operation instead of "claim only":** an earlier design held that account-merging (two `User` rows for one person) would never need to exist, since claiming a guest's own row in place covers "attach a credential to what I've already been doing." That's true only when the guest keeps using the *same* identity. It doesn't cover a guest signing into a *different*, already-existing account — a real and common path (AuthGuard auto-provisions a guest for every unauthenticated visit, including a first-time visit straight to the login page), and one where two identities genuinely can't both stay canonical. `GuestMergeService` is that operation, made safe rather than assumed away: atomic (one transaction, finalize → reassign → resolve membership collisions → recompute gems → audit → retire), idempotent (`GuestMerge.guestUserId` unique + a row lock on the guest during merge), and gem-accounting-correct (rebuilt through the same replay `GemService` already uses for corrections, never hand-copied).

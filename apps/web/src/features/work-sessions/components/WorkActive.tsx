@@ -174,6 +174,7 @@ export function WorkActive({
               loading={addingNote || composerExiting}
               recentTexts={recentTexts}
               teamId={teamId}
+              workSessionId={workSessionId}
             />
           </div>
         )}

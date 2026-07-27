@@ -9,6 +9,7 @@ import { formatDuration } from '../lib/formatDuration'
 type Note = components['schemas']['Note']
 
 interface WorkReviewProps {
+  workSessionId: string
   sessionName: string
   elapsedSeconds: number
   projectName?: string | null
@@ -22,6 +23,7 @@ interface WorkReviewProps {
 }
 
 export function WorkReview({
+  workSessionId,
   sessionName,
   elapsedSeconds,
   projectName,
@@ -58,6 +60,7 @@ export function WorkReview({
         autoFocus
         suggestionContext="stop"
         teamId={teamId}
+        persistKey={`stop-note-${workSessionId}`}
       />
 
       <div className="space-y-2">

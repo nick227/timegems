@@ -9,14 +9,26 @@ datasource db {
 
 // ── Identity ────────────────────────────────────────────────────────────────
 
-// A user carries zero or more credentials (googleId, email+passwordHash) --
-// never both a real identity AND a separate "anonymous" row for the same
-// person. `isAnonymous` starts true only for the auto-provisioned guest
-// path and flips to false permanently once any credential is added
-// (POST /auth/claim, /auth/claim/google) -- claiming an account is always an
-// in-place upgrade of this same row, specifically so account-merging (two
-// User rows for one person, with separate WorkSession/GemLedgerEntry
-// history) never has to exist as a feature.
+// A user carries zero or more credentials (googleId, email+passwordHash).
+// Two account-resolution paths exist, and it matters which one a given
+// request goes through:
+//
+// - **Claim** (POST /auth/claim, /auth/claim/google): the current user adds
+//   a credential to *itself*. Same row, same id, `isAnonymous` flips false.
+//   No merge involved -- there was only ever one identity.
+// - **Merge** (GuestMergeService, triggered from login/register/googleAuth
+//   whenever the caller's current session belongs to a still-anonymous
+//   guest): the caller authenticates as a *different*, already-existing
+//   User row. Two identities exist for a moment -- the guest's and the
+//   target's -- and cannot both remain canonical, so the guest's owned data
+//   (WorkSession, Note, Goal, ProjectEvent, Membership, TeamMembership;
+//   gems rebuilt via GemService's replay rather than copied) is reassigned
+//   to the target and the guest row is retired (`deletedAt`), never deleted
+//   outright. See GuestMergeService's own docstring for the full collision
+//   policy per model and GuestMerge for the audit trail this leaves behind.
+//   (An earlier version of this comment claimed merging "never has to
+//   exist as a feature" -- that held only for the claim path; it was never
+//   true of a guest signing into a *different*, pre-existing account.)
 model User {
   id           String    @id @default(cuid())
   email        String?   @unique
@@ -30,18 +42,45 @@ model User {
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
 
-  memberships      Membership[]
-  teamMemberships  TeamMembership[]
-  workSessions     WorkSession[]
-  notes            Note[]
-  sessions         Session[]
-  adminUser        AdminUser?
-  gemLedgerEntries GemLedgerEntry[]
-  gemBalances      GemBalance[]
-  gemAccounts      GemAccount[]
-  activeSessions   UserActiveSession[]
-  goalsCreated     Goal[]
-  projectEvents    ProjectEvent[]
+  memberships         Membership[]
+  teamMemberships     TeamMembership[]
+  workSessions        WorkSession[]
+  notes               Note[]
+  sessions            Session[]
+  adminUser           AdminUser?
+  gemLedgerEntries    GemLedgerEntry[]
+  gemBalances         GemBalance[]
+  gemAccounts         GemAccount[]
+  activeSessions      UserActiveSession[]
+  goalsCreated        Goal[]
+  projectEvents       ProjectEvent[]
+  guestMergeAsGuest   GuestMerge?         @relation("GuestMergeAsGuest")
+  guestMergesAsTarget GuestMerge[]        @relation("GuestMergeAsTarget")
+}
+
+// One row per completed guest→target merge (see GuestMergeService), never
+// mutated after creation -- the audit trail for "why does this account own
+// rows it didn't create." `guestUserId` is unique: a given guest can be
+// merged exactly once, ever, which doubles as this feature's durable
+// idempotency guarantee (a retried/duplicate request that reaches the merge
+// step a second time has no unclaimed guest left to insert this row for --
+// see GuestMergeService's row-lock + this constraint working together).
+model GuestMerge {
+  id                  String   @id @default(cuid())
+  guestUserId         String   @unique
+  targetUserId        String
+  sourceTenantId      String?
+  // Any session that was still RUNNING/PAUSED/REVIEWING at merge time and
+  // had to be force-finalized first -- kept separate from "every session
+  // this guest ever had" so support can tell "stopped normally" from
+  // "stopped because of a sign-in that happened mid-session."
+  finalizedSessionIds Json?
+  mergedAt            DateTime @default(now())
+
+  guest  User @relation("GuestMergeAsGuest", fields: [guestUserId], references: [id])
+  target User @relation("GuestMergeAsTarget", fields: [targetUserId], references: [id])
+
+  @@index([targetUserId])
 }
 
 model Session {
@@ -84,15 +123,15 @@ model Tenant {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
-  memberships      Membership[]
-  teams            Team[]
-  projects         Project[]
-  workSessions     WorkSession[]
-  agentEmployees   AgentEmployee[]
-  agentReports     AgentReport[]
-  goals            Goal[]
-  integrations     Integration[]
-  googleDocLinks   GoogleDocLink[]
+  memberships         Membership[]
+  teams               Team[]
+  projects            Project[]
+  workSessions        WorkSession[]
+  agentEmployees      AgentEmployee[]
+  agentReports        AgentReport[]
+  goals               Goal[]
+  integrations        Integration[]
+  googleDocLinks      GoogleDocLink[]
   discordBindings     DiscordBinding[]
   githubBindings      GithubBinding[]
   githubInstallations GithubInstallation[]
@@ -100,7 +139,7 @@ model Tenant {
   projectUpdates      ProjectUpdate[]
   projectUpdateJobs   ProjectUpdateJob[]
   activeSessions      Session[]
-  gemLedgerEntries GemLedgerEntry[]
+  gemLedgerEntries    GemLedgerEntry[]
 }
 
 enum TenantPlan {
@@ -172,20 +211,20 @@ model Project {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  tenant           Tenant           @relation(fields: [tenantId], references: [id])
-  team             Team?            @relation(fields: [teamId], references: [id])
-  workSessions     WorkSession[]
-  agentReports     AgentReport[]
-  googleDocLinks   GoogleDocLink[]
-  githubBindings   GithubBinding[]
-  projectEvents    ProjectEvent[]
-  projectUpdates   ProjectUpdate[]
+  tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  team              Team?              @relation(fields: [teamId], references: [id])
+  workSessions      WorkSession[]
+  agentReports      AgentReport[]
+  googleDocLinks    GoogleDocLink[]
+  githubBindings    GithubBinding[]
+  projectEvents     ProjectEvent[]
+  projectUpdates    ProjectUpdate[]
   projectUpdateJobs ProjectUpdateJob[]
-  gemType          GemType?
-  gemLedgerEntries GemLedgerEntry[]
-  gemBalances      GemBalance[]
-  gemAccounts      GemAccount[]
-  goals            Goal[]
+  gemType           GemType?
+  gemLedgerEntries  GemLedgerEntry[]
+  gemBalances       GemBalance[]
+  gemAccounts       GemAccount[]
+  goals             Goal[]
 
   @@index([tenantId])
   @@index([teamId])
@@ -625,8 +664,8 @@ model ProjectUpdate {
   provenance     ProjectUpdateProvenance @default(AI)
   createdAt      DateTime                @default(now())
 
-  tenant  Tenant             @relation(fields: [tenantId], references: [id])
-  project Project            @relation(fields: [projectId], references: [id])
+  tenant  Tenant            @relation(fields: [tenantId], references: [id])
+  project Project           @relation(fields: [projectId], references: [id])
   job     ProjectUpdateJob?
 
   @@index([tenantId, projectId, createdAt])

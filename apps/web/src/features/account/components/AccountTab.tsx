@@ -3,16 +3,16 @@ import { useLogout, useMyTenants } from '@timegems/sdk'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { GemBank } from '@/features/gems'
 import { TenantSwitcher } from './TenantSwitcher'
 import { ClaimAccountCard } from './ClaimAccountCard'
 import { ProfileCard } from './ProfileCard'
 import { useAuthorization } from '@/lib/Authorization'
 
 // The "Account" tab of the combined Settings page (see ../SettingsRoute.tsx)
-// -- profile, gem bank, workspace switcher, and logout. This used to be the
-// entire Settings page; it's now one panel among several since Projects,
-// Teams, Agent Reports, and Activity all moved in as tabs alongside it.
+// -- profile, workspace switcher, and logout. This used to be the entire
+// Settings page; it's now one panel among several since Projects, Teams,
+// Agent Reports, Activity, and (separately) Gem Bank all moved in as tabs
+// alongside it.
 export function AccountTab() {
   const { user } = useAuthorization()
   const tenantsQuery = useMyTenants()
@@ -37,11 +37,6 @@ export function AccountTab() {
       <ProfileCard />
 
       {user.isAnonymous && <ClaimAccountCard />}
-
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-muted-foreground">Gem Bank</p>
-        <GemBank />
-      </div>
 
       {showWorkspaces && (
         <div className="space-y-2">

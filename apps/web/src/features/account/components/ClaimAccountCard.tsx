@@ -13,11 +13,19 @@ type Mode = 'login' | 'register'
 
 // Shown only for isAnonymous users -- attach credentials to this guest row
 // (Register) or switch into an existing account (Sign in). Register upgrades
-// the same user in place (claimWithEmail/claimWithGoogle); Sign in replaces
-// the session and leaves this guest behind.
+// the same user in place (claimWithEmail/claimWithGoogle). Sign in
+// authenticates as a genuinely different User row -- but the server now
+// merges this guest's activity into that account as part of the same
+// request (GuestMergeService, triggered from login/register/googleAuth
+// whenever the caller's current session belongs to a guest): any work
+// sessions, notes, and gems this guest logged move over instead of being
+// stranded, so there's nothing here to warn about or confirm. Defaults to
+// "login" -- most people opening this card already have an account
+// somewhere, and registering-by-default risked silently minting a second
+// account for them.
 export function ClaimAccountCard() {
   const navigate = useNavigate()
-  const [mode, setMode] = useState<Mode>('register')
+  const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const claimEmail = useClaimEmail()
@@ -50,8 +58,8 @@ export function ClaimAccountCard() {
             <p className="text-sm font-medium">You're using a guest account</p>
             <p className="text-xs text-muted-foreground">
               {mode === 'register'
-                ? 'Register to keep this account across browsers and devices. Signing in instead switches to a different account and leaves this guest behind.'
-                : 'Sign in to an existing account. This guest session (and any unsaved work on it) will be left behind.'}
+                ? 'Register to keep this account across browsers and devices.'
+                : 'Sign in to keep this guest workspace with your account -- anything logged here moves over automatically.'}
             </p>
           </div>
         </div>

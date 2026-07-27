@@ -16,8 +16,9 @@ export function ProfileCard() {
     setName(user.name)
   }, [user.name])
 
+  const locked = user.isAnonymous
   const dirty = name.trim() !== user.name
-  const canSave = dirty && name.trim().length > 0 && !updateProfile.isPending
+  const canSave = !locked && dirty && name.trim().length > 0 && !updateProfile.isPending
 
   async function handleSave() {
     const trimmed = name.trim()
@@ -40,17 +41,24 @@ export function ProfileCard() {
             <label className="block text-xs font-medium text-muted-foreground mt-1 mb-1" htmlFor="display-name">
               Username
             </label>
-            <div className="flex gap-2">
+            <div className="flex gap-2" title={locked ? 'please login' : undefined}>
               <Input
                 id="display-name"
                 value={name}
+                disabled={locked}
                 onChange={(e) => setName(e.target.value)}
                 maxLength={100}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && canSave) void handleSave()
                 }}
               />
-              <Button size="sm" disabled={!canSave} loading={updateProfile.isPending} onClick={() => void handleSave()}>
+              <Button
+                size="sm"
+                disabled={!canSave}
+                title={locked ? 'please login' : undefined}
+                loading={updateProfile.isPending}
+                onClick={() => void handleSave()}
+              >
                 Save
               </Button>
             </div>

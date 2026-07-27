@@ -49,7 +49,7 @@ test('/settings and each of its tabs have no axe violations', async ({ page }) =
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await assertNoViolations(page)
 
-  for (const tabName of ['Activity', 'Projects', 'Teams', 'Agent Reports']) {
+  for (const tabName of ['Gems', 'Activity', 'Projects', 'Teams', 'Agents']) {
     await page.getByRole('tab', { name: tabName }).click()
     await assertNoViolations(page)
   }

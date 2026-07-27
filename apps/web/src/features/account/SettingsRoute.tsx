@@ -6,6 +6,7 @@ import { useTabs } from '@/components/ui/hooks/useTabs'
 import { useAuthorization } from '@/lib/Authorization'
 import { cn } from '@/lib/utils'
 import { AccountTab } from './components/AccountTab'
+import { GemsTab } from './components/GemsTab'
 
 const ViewsRoute = lazy(() => import('@/features/views').then((m) => ({ default: m.ViewsRoute })))
 const ProjectsRoute = lazy(() => import('@/features/projects').then((m) => ({ default: m.ProjectsRoute })))
@@ -13,14 +14,15 @@ const TeamsRoute = lazy(() => import('@/features/teams').then((m) => ({ default:
 const ReportsRoute = lazy(() => import('@/features/reports').then((m) => ({ default: m.ReportsRoute })))
 const AdminRoute = lazy(() => import('@/features/admin').then((m) => ({ default: m.AdminRoute })))
 
-type Tab = 'account' | 'activity' | 'projects' | 'teams' | 'reports' | 'admin'
+type Tab = 'account' | 'gems' | 'activity' | 'projects' | 'teams' | 'reports' | 'admin'
 
 const BASE_TABS: { value: Tab; label: string }[] = [
   { value: 'account', label: 'Account' },
+  { value: 'gems', label: 'Gems' },
   { value: 'activity', label: 'Activity' },
   { value: 'projects', label: 'Projects' },
   { value: 'teams', label: 'Teams' },
-  { value: 'reports', label: 'Agent Reports' },
+  { value: 'reports', label: 'Agents' },
 ]
 
 function isTab(value: string | null, tabs: readonly { value: Tab }[]): value is Tab {
@@ -29,9 +31,12 @@ function isTab(value: string | null, tabs: readonly { value: Tab }[]): value is 
 
 // Everything that used to be its own drawer-nav destination (Projects,
 // Teams, Agent Reports, the standalone Activity page) now lives here as a
-// tab, alongside what Settings already had (account, gem bank, logout) --
-// one page instead of six, now that there's no drawer to hold six separate
-// links. `?tab=` (not just component state) so a detail page's "Return to
+// tab, alongside what Settings already had (account, logout) -- one page
+// instead of six, now that there's no drawer to hold six separate links.
+// Gem Bank was folded into the Account tab at first but got promoted to its
+// own tab (see GemsTab) since gem balances are a big enough part of the
+// product to deserve their own destination, not a buried profile section.
+// `?tab=` (not just component state) so a detail page's "Return to
 // Projects"/"Return to Teams" link (see QueryErrorState call sites) lands
 // on the right panel, not just the default one.
 export function SettingsRoute() {
@@ -62,7 +67,7 @@ export function SettingsRoute() {
             key={t.value}
             {...getTabProps(t.value)}
             className={cn(
-              'px-3 py-1.5 rounded text-sm font-medium transition-colors',
+              'px-3 py-1.5 rounded text-sm font-medium transition-colors w-full',
               tab === t.value ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
           >
@@ -74,6 +79,7 @@ export function SettingsRoute() {
       <div {...getPanelProps(tab)}>
         <Suspense fallback={<PageSpinner />}>
           {tab === 'account' && <AccountTab />}
+          {tab === 'gems' && <GemsTab />}
           {tab === 'activity' && <ViewsRoute />}
           {tab === 'projects' && <ProjectsRoute />}
           {tab === 'teams' && <TeamsRoute />}

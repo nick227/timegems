@@ -45,6 +45,7 @@ export function SharedSessionView({ session, notes, elapsedSeconds }: SharedSess
     <div className="mx-auto min-h-screen w-full max-w-lg space-y-6 px-4 py-6">
       <section className="space-y-3 text-center">
         <div className="space-y-1">
+          <h1 className="text-xl font-bold tracking-tight">{session.name}</h1>
           <p className="text-sm font-semibold">{STATUS_LABEL[session.status] ?? session.status}</p>
           <p className="text-lg font-medium tracking-tight">{formatElapsedEstimate(elapsedSeconds)} logged</p>
           <p className="text-xs text-muted-foreground">

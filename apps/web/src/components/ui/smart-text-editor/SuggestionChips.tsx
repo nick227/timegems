@@ -23,7 +23,7 @@ const GENERIC_PHRASES: Record<'start' | 'progress' | 'stop', string[]> = {
 
 const MAX_CHIPS: Record<'start' | 'progress' | 'stop', number> = {
   start: 5,
-  progress: 12,
+  progress: 5,
   stop: 5,
 }
 
@@ -35,8 +35,12 @@ interface SuggestionChipsProps {
 }
 
 // Personalized text comes first, followed by context-specific generic
-// phrases. Active-work updates intentionally offer a broader 12-chip set;
-// start/stop surfaces remain compact. `description` renders nothing.
+// phrases, capped at 5 everywhere -- a live audit of the active-work
+// composer found the previous 12-chip "progress" set wrapping to enough
+// rows that it visually collided with the floating session-indicator bar
+// docked at the bottom of the screen, on top of just being more choice than
+// a "fastest possible path to a log entry" gesture should offer.
+// `description` renders nothing.
 export function SuggestionChips({ context, recentTexts = [], onSelect }: SuggestionChipsProps) {
   if (context === 'description') return null
 

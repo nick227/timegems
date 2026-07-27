@@ -4,11 +4,14 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import Image from '@tiptap/extension-image'
 import { cn } from '@/lib/utils'
+import { stripHtml } from '@/lib/stripHtml'
 import { Toolbar } from './Toolbar'
 import { SuggestionChips, type SuggestionContext } from './SuggestionChips'
 import { projectMention } from './projectMention'
 import { createPeopleMention } from './peopleMention'
 import { Video, Audio } from './mediaNodes'
+
+const DRAFT_KEY_PREFIX = 'smart-text-draft:'
 
 export interface SmartTextEditorProps {
   value: string
@@ -25,6 +28,17 @@ export interface SmartTextEditorProps {
   recentTexts?: string[]
   /** Enables @-mention suggestions scoped to this team's members; omit if the current context has no team. */
   teamId?: string
+  /**
+   * Stable identity for this specific capture gesture (e.g. `note-${workSessionId}`,
+   * `stop-note-${workSessionId}`) -- when set, unsaved content survives a
+   * crash/refresh/closed tab via localStorage, restored on mount and cleared
+   * the moment `value` goes back to empty (a real submit, not just the user
+   * clearing the field by hand, which also happens to clear it -- both are
+   * "nothing left to recover" states, so one code path covers both). Omit
+   * for contexts that don't need this (e.g. a field seeded from and always
+   * reset to existing server data).
+   */
+  persistKey?: string
   /** DOM id for the contentEditable root -- lets a <Field>/<Label> connect via htmlFor, same as Input/Textarea. Named literally (not `ariaDescribedBy`) so <Field>'s cloneElement can wire it the same way it does for any native element. */
   id?: string
   /** Accessible name when a visible <Label> genuinely doesn't fit (e.g. NoteComposer's placeholder-only capture gesture). Prefer <Field><Label> over this where a visible label works. */
@@ -51,6 +65,7 @@ export function SmartTextEditor({
   suggestionContext,
   recentTexts,
   teamId,
+  persistKey,
   id,
   'aria-label': ariaLabel,
   'aria-describedby': ariaDescribedBy,
@@ -165,6 +180,34 @@ export function SmartTextEditor({
   useEffect(() => {
     editor?.setEditable(!disabled)
   }, [disabled, editor])
+
+  // Draft recovery: restore once, then keep localStorage mirroring `value`
+  // from then on -- one effect, not two, deliberately. A separate
+  // "restore" effect and "persist" effect race each other: persist doesn't
+  // know a restore is pending, so on the very first render (editor still
+  // null, value still '') it would see "no content" and delete the saved
+  // draft before restore ever gets a chance to read it back -- caught by
+  // an actual reload-and-recover test, not just reasoning about it.
+  // `restoredRef` makes the restore attempt happen at most once per mount
+  // (so clearing the field by hand later doesn't bring an old draft back),
+  // and the early `return` on a successful restore skips this same pass's
+  // persist step, since a re-render with the real value is already coming.
+  const restoredRef = useRef(false)
+  useEffect(() => {
+    if (!editor || !persistKey) return
+    const key = DRAFT_KEY_PREFIX + persistKey
+    if (!restoredRef.current) {
+      restoredRef.current = true
+      const saved = localStorage.getItem(key)
+      if (saved && !value) {
+        onChangeRef.current(saved)
+        return
+      }
+    }
+    const hasContent = stripHtml(value).length > 0 || /<(img|video|audio)\b/i.test(value)
+    if (hasContent) localStorage.setItem(key, value)
+    else localStorage.removeItem(key)
+  }, [value, editor, persistKey])
 
   if (!editor) return null
 

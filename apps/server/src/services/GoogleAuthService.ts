@@ -3,9 +3,11 @@ import { db } from '@timegems/db'
 import { randomUUID } from 'crypto'
 import { HttpError } from '../lib/errors'
 import { provisionPersonalTenant, syncPersonalTenantName } from '../lib/provisionTenant'
+import { GuestMergeService } from './GuestMergeService'
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
+const guestMergeService = new GuestMergeService()
 
 export class GoogleAuthService {
   // Shared by authenticate() (sign in/register) and claimWithGoogle()
@@ -34,7 +36,13 @@ export class GoogleAuthService {
     return payload
   }
 
-  async authenticate(credential: string) {
+  // `guestUserId` is the caller's current session's user, if any, and only
+  // when still anonymous (see currentAnonymousUserId) -- this is genuinely
+  // authenticating as a *different* User row than that guest (whether an
+  // existing Google account or a brand-new one just created above), so
+  // whatever the guest had logged gets merged in rather than stranded. Same
+  // reasoning as EmailAuthService's register()/login().
+  async authenticate(credential: string, guestUserId?: string | null) {
     const payload = await this.verifyCredential(credential)
     const { sub: googleId, email, name, picture } = payload
 
@@ -58,6 +66,15 @@ export class GoogleAuthService {
     }
 
     if (user.suspendedAt) throw new HttpError(403, 'Account suspended')
+
+    // Whether newTenantId is set (brand-new Google user) or not (existing
+    // one), the guest's tenant -- if there was a guest to merge -- is where
+    // the content they just brought over actually lives, so it takes
+    // priority over either.
+    if (guestUserId && guestUserId !== user.id) {
+      const mergedTenantId = await guestMergeService.merge(guestUserId, user.id)
+      if (mergedTenantId) newTenantId = mergedTenantId
+    }
 
     const session = await db.session.create({
       data: {

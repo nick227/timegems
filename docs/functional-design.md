@@ -61,6 +61,15 @@ The app has one dominant screen with three states.
 - Grouped by project, then gem type: icon, color, name, total gems, small "X min to next gem" if there's an active carry-over.
 - Read-only. No spending/redeeming mechanic in V1 — gems are a progress/recognition unit, not a currency yet.
 
+## Guest accounts: claim vs. merge
+
+Two distinct ways a guest's session resolves into a durable identity — the Settings guest card and the general login page both expose the same underlying choice, just framed differently:
+
+- **Claim** (default framing on the Settings guest card: "Register"): the guest adds a credential (email/password or Google) to their *own* row. Same user id, same history, nothing to transfer — `isAnonymous` just flips to `false`.
+- **Merge** (default framing: "Sign in"): the guest authenticates as a *different*, already-existing account. Since the two identities can't both remain canonical, the guest's work sessions (finalizing any still running/paused/awaiting-review first, so nothing looks like it was recording and then vanished), notes, goals, gem history, and tenant/team memberships are transferred to the account signed into, and the guest identity is retired. This happens automatically, server-side, on any login/register/Google-auth call made while the caller's current session is still a guest — there is no separate "confirm the merge" step, because the transfer is guaranteed atomic and nothing is lost. The account's active tenant switches to the guest's former workspace immediately, so the merged content is visible without an extra manual step.
+- Sign-in copy should make the outcome legible even though there's no confirmation gate: *"Sign in to keep this guest workspace with your account"* rather than a bare "Sign in" with no context.
+- Full collision/idempotency policy lives in code, not here: see `GuestMergeService`'s docstring (apps/server) and the `User`/`GuestMerge` model comments in `schema.prisma`.
+
 ## Live presence
 
 - A small presence indicator (colored dot + label: online / working — *Project* / paused / offline) appears next to each teammate wherever teammates are listed (Team page in V1).
@@ -93,7 +102,7 @@ Two distinct areas, both behind the hamburger → Admin:
 - On reconnect (network blip, laptop sleep/wake), the client re-establishes the socket and immediately re-sends current status — no manual refresh needed.
 - Presence is tenant-scoped only: a user sees live status for other members of their *current active tenant*, never across tenants they don't share.
 - Live presence and active work are intentionally different signals. Closing the browser removes the user's ephemeral online presence, but it does not pause or finish a persisted work session. Project and Work surfaces derive the current user's "working" state from `WorkSession`, not the WebSocket presence map.
-- Credentialed accounts recover their active session after reopening the browser while their authenticated session remains valid. Guest recovery is browser-cookie-bound and therefore best-effort; users should claim an account when durable recovery matters.
+- Credentialed accounts recover their active session after reopening the browser while their authenticated session remains valid. Guest recovery is browser-cookie-bound and therefore best-effort *until the guest authenticates* — claiming upgrades the same account in place, and signing into a different, already-existing account triggers an automatic merge of the guest's activity into it (see "Guest accounts: claim vs. merge" below); either path makes recovery durable, so "claim an account when durable recovery matters" applies equally to signing in, not just registering fresh.
 
 ## Interaction rules
 

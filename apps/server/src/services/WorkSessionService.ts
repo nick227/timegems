@@ -6,6 +6,7 @@ import { HttpError } from '../lib/errors'
 import { requireWorkSessionTenantAccess } from '../lib/workSessionAccess'
 import { sanitizeRichText } from '../lib/sanitizeHtml'
 import { generateSessionName } from '../lib/sessionName'
+import { sumActiveSeconds } from '../lib/workSessionTime'
 
 const gemService = new GemService()
 const agentEmployeeService = new AgentEmployeeService()
@@ -37,16 +38,6 @@ async function validateGoalForSession(tenantId: string, goalId: string, projectI
   if (goal.projectId && goal.projectId !== projectId) {
     throw new HttpError(409, "Goal belongs to a different project than this session's")
   }
-}
-
-function sumActiveSeconds(intervals: { kind: string; startedAt: Date; endedAt: Date | null }[], now: Date) {
-  let total = 0
-  for (const interval of intervals) {
-    if (interval.kind !== 'ACTIVE') continue
-    const end = interval.endedAt ?? now
-    total += Math.max(0, Math.floor((end.getTime() - interval.startedAt.getTime()) / 1000))
-  }
-  return total
 }
 
 // WorkSessionDetail (the OpenAPI schema) has a flat `gemsAwarded` field, not
