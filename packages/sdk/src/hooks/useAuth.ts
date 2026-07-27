@@ -114,3 +114,19 @@ export function useLogout() {
     },
   })
 }
+
+export function useUpdateProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: { name: string }) => {
+      const { data, error, response } = await getApiClient().PATCH('/auth/me', { body })
+      if (error) throw new ApiError(response.status, (error as any).error)
+      return data!
+    },
+    onSuccess: () => {
+      // Name change can also rename the auto-provisioned personal workspace.
+      void queryClient.invalidateQueries({ queryKey: ['me'] })
+      void queryClient.invalidateQueries({ queryKey: ['tenants'] })
+    },
+  })
+}

@@ -283,6 +283,62 @@ describe('claimWithEmail', () => {
   })
 })
 
+describe('updateProfile', () => {
+  it('requires auth', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/auth/me',
+      payload: { name: 'Alex' },
+    })
+    expect(res.statusCode).toBe(401)
+  })
+
+  it('PATCH /auth/me renames the user and syncs the default personal workspace name', async () => {
+    const guest = await app.inject({ method: 'POST', url: '/auth/anonymous' })
+    const userId = guest.json().data.id as string
+    const oldName = guest.json().data.name as string
+    const membership = await db.membership.findFirstOrThrow({
+      where: { userId },
+      include: { tenant: true },
+    })
+    expect(membership.tenant.name).toBe(`${oldName}'s workspace`)
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/auth/me',
+      headers: asAuth(userId),
+      payload: { name: '  Alex Rivera  ' },
+    })
+    expect(res.statusCode).toBe(200)
+    await validateResponse('updateProfile', 200, res.json())
+    expect(res.json().data.name).toBe('Alex Rivera')
+
+    const tenant = await db.tenant.findUniqueOrThrow({ where: { id: membership.tenantId } })
+    expect(tenant.name).toBe("Alex Rivera's workspace")
+  })
+
+  it('leaves a manually renamed workspace alone', async () => {
+    const guest = await app.inject({ method: 'POST', url: '/auth/anonymous' })
+    const userId = guest.json().data.id as string
+    const membership = await db.membership.findFirstOrThrow({ where: { userId } })
+    await db.tenant.update({
+      where: { id: membership.tenantId },
+      data: { name: 'Acme Corp' },
+    })
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/auth/me',
+      headers: asAuth(userId),
+      payload: { name: 'Alex' },
+    })
+    expect(res.statusCode).toBe(200)
+
+    const tenant = await db.tenant.findUniqueOrThrow({ where: { id: membership.tenantId } })
+    expect(tenant.name).toBe('Acme Corp')
+  })
+})
+
 describe('claimWithGoogle', () => {
   it('requires auth', async () => {
     const res = await app.inject({ method: 'POST', url: '/auth/claim/google', payload: { credential: 'x' } })

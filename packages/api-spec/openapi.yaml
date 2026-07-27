@@ -186,6 +186,12 @@ components:
         email: { type: string, format: email }
         password: { type: string, minLength: 8, maxLength: 200 }
 
+    UpdateProfileInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+
     # ── Tenancy ───────────────────────────────────────────────────────────
     Tenant:
       type: object
@@ -796,6 +802,23 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CurrentUserResponse' }
+    patch:
+      operationId: updateProfile
+      tags: [auth]
+      summary: Update the current user's display name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProfileInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
 
   # ── Tenants ─────────────────────────────────────────────────────────────
   /tenants:

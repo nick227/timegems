@@ -1,12 +1,14 @@
 import { GoogleAuthService } from '../services/GoogleAuthService'
 import { AnonymousAuthService } from '../services/AnonymousAuthService'
 import { EmailAuthService } from '../services/EmailAuthService'
+import { ProfileService } from '../services/ProfileService'
 import { db } from '@timegems/db'
 import { capabilitiesFor, type Capability } from '../lib/authorization'
 
 const googleAuthService = new GoogleAuthService()
 const anonymousAuthService = new AnonymousAuthService()
 const emailAuthService = new EmailAuthService()
+const profileService = new ProfileService()
 
 const COOKIE = {
   httpOnly: true,
@@ -90,4 +92,9 @@ export async function getCurrentUser(request: any, reply: any) {
       capabilities,
     },
   })
+}
+
+export async function updateProfile(request: any, reply: any) {
+  const user = await profileService.updateName(request.user.id, request.body.name)
+  return reply.send({ data: user })
 }

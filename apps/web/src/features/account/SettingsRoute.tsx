@@ -1,21 +1,22 @@
 import { useState } from 'react'
-import { useLogout } from '@timegems/sdk'
+import { useLogout, useMyTenants } from '@timegems/sdk'
 import { useNavigate } from 'react-router-dom'
-import { Card, CardContent } from '@/components/ui/Card'
-import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { GemBank } from '@/features/gems'
 import { TenantSwitcher } from './components/TenantSwitcher'
 import { ClaimAccountCard } from './components/ClaimAccountCard'
+import { ProfileCard } from './components/ProfileCard'
 import { useAuthorization } from '@/lib/Authorization'
 
 export function SettingsRoute() {
   const { user } = useAuthorization()
+  const tenantsQuery = useMyTenants()
   const logout = useLogout()
   const navigate = useNavigate()
   const [confirmingLogout, setConfirmingLogout] = useState(false)
+  const workspaceCount = tenantsQuery.data?.data.length ?? 0
 
   async function handleLogout() {
     try {
@@ -29,15 +30,7 @@ export function SettingsRoute() {
     <div className="max-w-xl mx-auto px-4 py-6 space-y-6">
       <PageHeader title="Settings" />
 
-      <Card>
-        <CardContent className="py-4 flex items-center gap-3">
-          <Avatar src={user.avatarUrl} name={user.name} size="lg" />
-          <div>
-            <p className="text-sm font-medium">{user.name}</p>
-            {user.email && <p className="text-xs text-muted-foreground">{user.email}</p>}
-          </div>
-        </CardContent>
-      </Card>
+      <ProfileCard />
 
       {user.isAnonymous && <ClaimAccountCard />}
 
@@ -47,7 +40,9 @@ export function SettingsRoute() {
       </div>
 
       <div className="space-y-2">
-        <p className="text-sm font-medium text-muted-foreground">Your organizations</p>
+        <p className="text-sm font-medium text-muted-foreground">
+          {workspaceCount === 1 ? 'Workspace' : 'Workspaces'}
+        </p>
         <TenantSwitcher />
       </div>
 

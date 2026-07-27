@@ -136,7 +136,8 @@ test('/integrations', async ({ page }) => {
 test('/settings', async ({ page }) => {
   await page.goto('/settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-  await expect(page.getByRole('main').getByText('E2E User')).toBeVisible()
+  await expect(page.getByLabel('Username')).toHaveValue('E2E User')
+  await expect(page.getByText(/workspace/i).first()).toBeVisible()
 })
 
 test('/admin', async ({ page }) => {

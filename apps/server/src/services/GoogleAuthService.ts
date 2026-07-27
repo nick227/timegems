@@ -2,7 +2,7 @@ import { OAuth2Client } from 'google-auth-library'
 import { db } from '@timegems/db'
 import { randomUUID } from 'crypto'
 import { HttpError } from '../lib/errors'
-import { provisionPersonalTenant } from '../lib/provisionTenant'
+import { provisionPersonalTenant, syncPersonalTenantName } from '../lib/provisionTenant'
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
@@ -87,17 +87,21 @@ export class GoogleAuthService {
     const current = await db.user.findUnique({ where: { id: userId } })
     if (!current) throw new HttpError(404, 'User not found')
 
-    return db.user.update({
+    const nextName = current.isAnonymous ? (name ?? current.name) : current.name
+    const user = await db.user.update({
       where: { id: userId },
       data: {
         googleId,
         isAnonymous: false,
         // Don't clobber a name/email/avatar the user already set themselves.
         email: current.email ?? email,
-        name: current.isAnonymous ? (name ?? current.name) : current.name,
+        name: nextName,
         avatarUrl: current.avatarUrl ?? picture ?? null,
       },
     })
+
+    await syncPersonalTenantName(userId, current.name, nextName)
+    return user
   }
 
   async logout(token: string) {

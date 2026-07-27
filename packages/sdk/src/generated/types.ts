@@ -135,7 +135,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update the current user's display name */
+        patch: operations["updateProfile"];
         trace?: never;
     };
     "/tenants": {
@@ -788,6 +789,9 @@ export interface components {
             email: string;
             password: string;
         };
+        UpdateProfileInput: {
+            name: string;
+        };
         Tenant: {
             id: string;
             name: string;
@@ -1369,6 +1373,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CurrentUserResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProfileInput"];
+            };
+        };
+        responses: {
+            /** @description Profile updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
                 };
             };
             401: components["responses"]["Unauthorized"];
