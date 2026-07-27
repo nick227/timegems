@@ -28,7 +28,29 @@ export function useCreateNote(workSessionId: string) {
       if (error) throw new ApiError(response.status, (error as any).error)
       return data!
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Prepend immediately so the new update can fade in before the composer
+      // fades out -- waiting on invalidate alone left a blank beat that felt jumpy.
+      const note = data.data
+      if (note) {
+        queryClient.setQueryData(
+          ['notes', workSessionId, undefined],
+          (existing: { pages: Array<{ data: typeof note[]; meta: unknown }>; pageParams: unknown[] } | undefined) => {
+            if (!existing?.pages?.length) {
+              return {
+                pages: [{ data: [note], meta: { nextCursor: null } }],
+                pageParams: [undefined],
+              }
+            }
+            const [first, ...rest] = existing.pages
+            if (!first || first.data.some((entry) => entry.id === note.id)) return existing
+            return {
+              ...existing,
+              pages: [{ ...first, data: [note, ...first.data] }, ...rest],
+            }
+          },
+        )
+      }
       queryClient.invalidateQueries({ queryKey: ['notes', workSessionId] })
       queryClient.invalidateQueries({ queryKey: ['work-session', 'active'] })
     },

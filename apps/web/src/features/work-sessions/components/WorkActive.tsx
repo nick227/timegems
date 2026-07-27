@@ -72,11 +72,22 @@ export function WorkActive({
   teamId,
 }: WorkActiveProps) {
   const [composerOpen, setComposerOpen] = useState(false)
-  const [composerSeed, setComposerSeed] = useState<string | undefined>()
+  const [composerExiting, setComposerExiting] = useState(false)
 
   async function handleAddNote(body: string) {
     await onAddNote(body)
+    // Let the new note paint + fade in first, then dissolve the form.
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
+    await new Promise((resolve) => setTimeout(resolve, 160))
+    setComposerExiting(true)
+    await new Promise((resolve) => setTimeout(resolve, 180))
     setComposerOpen(false)
+    setComposerExiting(false)
+  }
+
+  function toggleComposer() {
+    if (composerExiting) return
+    setComposerOpen((open) => !open)
   }
 
   return (
@@ -147,36 +158,29 @@ export function WorkActive({
             aria-expanded={composerOpen}
             className="w-[120px] truncate"
             aria-controls="work-update-composer"
-            onClick={() => setComposerOpen((open) => !open)}
+            onClick={toggleComposer}
           >
             {composerOpen ? <X size={14} /> : <Plus size={14} />}
             {composerOpen ? 'Cancel' : 'Add update'}
           </Button>
         </div>
         {composerOpen && (
-          <div id="work-update-composer">
+          <div
+            id="work-update-composer"
+            className={composerExiting ? 'animate-fade-out-fast' : 'animate-fade-in-fast'}
+          >
             <NoteComposer
               onAdd={handleAddNote}
-              loading={addingNote}
+              loading={addingNote || composerExiting}
               recentTexts={recentTexts}
               teamId={teamId}
-              seedText={composerSeed}
             />
           </div>
         )}
         <NoteList notes={notes} />
       </section>
 
-      {activeProjectId && (
-        <ProjectFeed
-          projectId={activeProjectId}
-          compact
-          onUseInUpdate={(text) => {
-            setComposerSeed(text)
-            setComposerOpen(true)
-          }}
-        />
-      )}
+      {activeProjectId && <ProjectFeed projectId={activeProjectId} compact />}
     </div>
   )
 }

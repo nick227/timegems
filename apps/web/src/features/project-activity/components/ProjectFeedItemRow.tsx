@@ -1,15 +1,13 @@
 import type { ProjectFeedItem } from '@timegems/sdk'
-import { Button } from '@/components/ui/Button'
 import { RichTextView } from '@/components/ui/RichTextView'
 import { feedProvenanceClass, feedProvenanceLabel } from '../lib/provenance'
 import { ProjectFeedEvidenceDialog } from './ProjectFeedEvidenceDialog'
 
 interface ProjectFeedItemRowProps {
   item: ProjectFeedItem
-  onUseInUpdate?: (text: string) => void
 }
 
-export function ProjectFeedItemRow({ item, onUseInUpdate }: ProjectFeedItemRowProps) {
+export function ProjectFeedItemRow({ item }: ProjectFeedItemRowProps) {
   const hasEvidence = Boolean(
     item.evidence?.commits?.length ||
       item.evidence?.filesChanged?.length ||
@@ -17,8 +15,6 @@ export function ProjectFeedItemRow({ item, onUseInUpdate }: ProjectFeedItemRowPr
       item.evidence?.checkRun ||
       item.links?.length,
   )
-
-  const useText = item.body ?? item.title ?? ''
 
   return (
     <li className="space-y-2 rounded-lg bg-surface px-4 py-3">
@@ -40,14 +36,11 @@ export function ProjectFeedItemRow({ item, onUseInUpdate }: ProjectFeedItemRowPr
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {hasEvidence && <ProjectFeedEvidenceDialog item={item} />}
-        {onUseInUpdate && useText && (
-          <Button size="sm" variant="outline" onClick={() => onUseInUpdate(useText)}>
-            Use in update
-          </Button>
-        )}
-      </div>
+      {hasEvidence && (
+        <div className="flex flex-wrap gap-2">
+          <ProjectFeedEvidenceDialog item={item} />
+        </div>
+      )}
     </li>
   )
 }

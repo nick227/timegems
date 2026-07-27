@@ -6,12 +6,11 @@ import { ProjectFeedItemRow } from './ProjectFeedItemRow'
 
 interface ProjectFeedProps {
   projectId: string
-  onUseInUpdate?: (text: string) => void
   live?: boolean
   compact?: boolean
 }
 
-export function ProjectFeed({ projectId, onUseInUpdate, live = true, compact = false }: ProjectFeedProps) {
+export function ProjectFeed({ projectId, live = true, compact = false }: ProjectFeedProps) {
   const feedQuery = useProjectFeed(projectId)
   if (live) useProjectFeedLive(projectId)
 
@@ -37,7 +36,7 @@ export function ProjectFeed({ projectId, onUseInUpdate, live = true, compact = f
       {!compact && <p className="text-sm font-medium text-muted-foreground">Project activity</p>}
       <ul className="space-y-3">
         {items.slice(0, compact ? 5 : undefined).map((item) => (
-          <ProjectFeedItemRow key={item.id} item={item} onUseInUpdate={onUseInUpdate} />
+          <ProjectFeedItemRow key={item.id} item={item} />
         ))}
       </ul>
       {!compact && (
