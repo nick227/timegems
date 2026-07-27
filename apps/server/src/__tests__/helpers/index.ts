@@ -8,6 +8,8 @@ import addFormats from 'ajv-formats'
 import { resolve } from 'path'
 import { db } from '@timegems/db'
 import * as handlers from '../../handlers'
+import { HttpError } from '../../lib/errors'
+import { registerErrorHandler } from '../../lib/errorHandler'
 
 // Two seeded users available in every test — use testOtherUserId for
 // cross-user permission tests (e.g. "user A cannot stop user B's session")
@@ -66,25 +68,39 @@ export function buildTestApp() {
     await app.register(cookie, {
       secret: process.env.COOKIE_SECRET ?? 'test-cookie-secret-at-least-32-characters',
     })
+    registerErrorHandler(app)
     await app.register(openapiGlue, {
       specification: specPath,
-      service: handlers,
+      serviceHandlers: handlers,
       securityHandlers: {
         // Test auth: accept "Bearer <userId>" directly, scoped to testTenantId.
         // Tests are not testing the auth transport; they're testing business logic.
         async bearerAuth(request: any) {
           const id = request.headers.authorization?.replace('Bearer ', '')
-          if (!id) throw { statusCode: 401, message: 'Unauthorized' }
+          if (!id) throw new HttpError(401, 'Unauthorized')
           request.user = await db.user.findUniqueOrThrow({ where: { id } })
-          request.tenantId = testTenantId
+          const membership = await db.membership.findUnique({
+            where: { userId_tenantId: { userId: id, tenantId: testTenantId } },
+          })
+          request.auth = {
+            userId: id,
+            sessionId: `test-session-${id}`,
+            ...(membership
+              ? {
+                  tenantId: membership.tenantId,
+                  membershipId: membership.id,
+                  membershipRole: membership.role,
+                }
+              : { tenantAccessRevoked: true }),
+          }
         },
         async adminAuth(request: any) {
           const id = request.headers.authorization?.replace('Bearer ', '')
-          if (!id) throw { statusCode: 401, message: 'Unauthorized' }
+          if (!id) throw new HttpError(401, 'Unauthorized')
           request.user = await db.user.findUniqueOrThrow({ where: { id } })
-          request.tenantId = testTenantId
+          request.auth = { userId: id, sessionId: `test-session-${id}` }
           const admin = await db.adminUser.findUnique({ where: { userId: id } })
-          if (!admin) throw { statusCode: 403, message: 'Forbidden' }
+          if (!admin) throw new HttpError(403, 'Forbidden')
         },
       },
       noAdditional: true,

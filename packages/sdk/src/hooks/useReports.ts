@@ -2,10 +2,12 @@ import { useQuery } from '@tanstack/react-query'
 import { getApiClient, ApiError } from '../client'
 
 export function useTimeSummary(params: {
-  period: 'day' | 'month' | 'year'
+  period: 'day' | 'week' | 'month' | 'year'
   date: string
   scope: 'individual' | 'team'
   teamId?: string
+  from?: string
+  to?: string
 }) {
   return useQuery({
     queryKey: ['time-summary', params],

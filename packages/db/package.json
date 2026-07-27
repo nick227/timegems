@@ -6,7 +6,10 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "db:push": "prisma db push",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:status": "prisma migrate status",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:e2e": "tsx prisma/seed-e2e.ts",
     "db:studio": "prisma studio"
   },
   "dependencies": {

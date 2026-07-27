@@ -5,14 +5,14 @@
 - Node.js 20+
 - pnpm 9+
 - MySQL 8+ / MariaDB 10.11+ (or compatible)
-- A Google Cloud project with OAuth 2.0 credentials (for real login — see below)
+- A Google Cloud project with OAuth 2.0 credentials only when testing real Google login
 
 ## First-time setup
 
 ```bash
 pnpm install
-cp .env.example .env        # fill in DATABASE_URL, GOOGLE_CLIENT_ID
-pnpm bootstrap               # installs, pushes schema, generates SDK/pages/tests, seeds
+cp .env.example .env        # fill in DATABASE_URL; Google credentials are optional locally
+pnpm bootstrap              # installs, migrates, generates, and seeds
 ```
 
 `pnpm bootstrap` prints a dev session token from the seed script — set it as a `token` cookie on `localhost:5173` (via devtools) to explore the app immediately without configuring real Google OAuth first.
@@ -33,15 +33,26 @@ API Docs: http://localhost:3001/docs — live Swagger UI
 2. Add `http://localhost:5173` (dev) and your production domain to Authorized JavaScript origins.
 3. Copy the Client ID into both `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` in `.env`.
 
+## Daily commands
+
+| Command | Purpose |
+|---|---|
+| `pnpm dev` | Start the web and API development servers |
+| `pnpm check:fast` | Typecheck, lint, and check generated-file/contract drift |
+| `pnpm test:affected` | Run the currently applicable package tests |
+| `pnpm test` | Run all package test suites |
+| `pnpm verify` | Full typecheck, lint, server tests, Playwright, generation drift, production build, and migration status |
+| `pnpm db:migrate` | Apply committed database migrations |
+| `pnpm generate` | Regenerate SDK types, missing test stubs, explicitly opted-in pages, and docs in the correct order |
+
 ## Running tests
 
-Server integration tests need `DATABASE_URL` pointed at a **separate** database from dev (tests wipe every table between runs):
+Server integration tests always use an isolated database because they wipe every table between tests. Set `TEST_DATABASE_URL` explicitly when needed; otherwise the runner derives a sibling database ending in `_test` from `DATABASE_URL`, creates it if necessary, and applies migrations before Vitest starts.
 
 ```bash
-export DATABASE_URL="mysql://user:pass@localhost:3306/timegems_test"
-pnpm --filter @timegems/db exec prisma db push --skip-generate
-pnpm test          # Vitest — server integration tests (79 tests)
-pnpm test:e2e      # Playwright — frontend smoke test (requires both dev servers)
+pnpm test                       # package tests, including server integration tests
+pnpm --filter web test:e2e      # Playwright; starts the web and API servers
+pnpm verify                     # exhaustive release verification
 ```
 
 ## Code generators
@@ -49,13 +60,14 @@ pnpm test:e2e      # Playwright — frontend smoke test (requires both dev serve
 | Command | What it does |
 |---|---|
 | `pnpm sdk:generate` | Regenerate SDK types from `openapi.yaml` — run after spec changes |
-| `pnpm test:generate` | Append test stubs for new routes — run after spec changes |
+| `pnpm test:generate` | Append safe `it.todo` coverage markers for new routes |
 | `pnpm docs:generate` | Regenerate `docs/api-reference.md`, `docs/env-vars.md`, `docs/database.md` |
-| `pnpm pages:generate` | Generate page stubs from the spec — **see the caveat below** |
+| `pnpm pages:generate` | Generate only pages explicitly opted in with `x-timegems-page` |
+| `pnpm generate:check` | Check SDK, test coverage markers, opted-in pages, and docs without writing |
 
-### `pages:generate` caveat
+### Safe page generation
 
-The generator infers a page pattern from HTTP method alone (every `POST` → create-form, every `PATCH` → edit-form, every parameterless `GET` → list, every `GET` with a path param → detail). That fits CRUD resources (Projects, Teams, Reports, Admin lists) but not action endpoints (`/work-sessions/{id}/pause`, `/tenants/{id}/select`, etc.) — those are hand-built (see `apps/web/src/pages/WorkPage.tsx`). If you re-run `pnpm pages:generate` or `pnpm bootstrap` on a clean checkout, it will recreate stub pages for those action endpoints using signatures that don't match our hand-written hooks, and `pnpm --filter web typecheck` will fail. Delete anything created in `apps/web/src/pages/` that isn't imported by `App.tsx`, then re-run typecheck.
+Page generation is opt-in rather than inferred from HTTP methods. Add `x-timegems-page: list`, `detail`, `create-form`, `edit-form`, or `auth` to an operation only when its SDK hook follows that supported page shape. Generated pages live under `apps/web/src/generated/pages`; the generator never rewrites `App.tsx` or handcrafted feature routes. Action endpoints such as pause, resume, review, stop, and tenant selection are therefore ignored by default.
 
 ## Adding a new route
 

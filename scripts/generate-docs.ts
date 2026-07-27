@@ -1,11 +1,28 @@
 import { load } from 'js-yaml'
-import { readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { resolve } from 'path'
 
 const root = resolve(__dirname, '..')
 const spec = load(readFileSync(resolve(root, 'packages/api-spec/openapi.yaml'), 'utf-8')) as any
 const docsDir = resolve(root, 'docs')
 mkdirSync(docsDir, { recursive: true })
+const checkMode = process.argv.includes('--check')
+let drifted = 0
+
+function emit(relativePath: string, content: string) {
+  const path = resolve(root, relativePath)
+  if (checkMode) {
+    if (!existsSync(path) || readFileSync(path, 'utf-8') !== content) {
+      console.error(`✗ ${relativePath} is out of date`)
+      drifted++
+    } else {
+      console.log(`✓ ${relativePath}`)
+    }
+    return
+  }
+  writeFileSync(path, content)
+  console.log(`✓ ${relativePath}`)
+}
 
 // ── api-reference.md ────────────────────────────────────────────────────────
 
@@ -36,8 +53,7 @@ for (const [tag, rows] of Object.entries(byTag)) {
   apiLines.push(...rows, '')
 }
 
-writeFileSync(resolve(docsDir, 'api-reference.md'), apiLines.join('\n'))
-console.log('✓ docs/api-reference.md')
+emit('docs/api-reference.md', apiLines.join('\n'))
 
 // ── env-vars.md ──────────────────────────────────────────────────────────────
 
@@ -57,8 +73,7 @@ for (const line of envExample.split('\n')) {
   envLines.push(`| \`${key.trim()}\` | Yes | — |`)
 }
 
-writeFileSync(resolve(docsDir, 'env-vars.md'), envLines.join('\n'))
-console.log('✓ docs/env-vars.md')
+emit('docs/env-vars.md', envLines.join('\n'))
 
 // ── database.md ───────────────────────────────────────────────────────────────
 
@@ -81,7 +96,11 @@ if (enums.length) {
   dbLines.push('## Enums', '', ...enums.map(e => `- \`${e}\``), '')
 }
 
-writeFileSync(resolve(docsDir, 'database.md'), dbLines.join('\n'))
-console.log('✓ docs/database.md')
+emit('docs/database.md', dbLines.join('\n'))
 
-console.log('\nAll docs generated. Run again after spec/schema changes.')
+if (checkMode && drifted > 0) {
+  console.error(`\n❌ ${drifted} generated document${drifted === 1 ? '' : 's'} out of date. Run \`pnpm generate\`.`)
+  process.exit(1)
+}
+
+console.log(checkMode ? '\n✓ Generated docs are current.' : '\nAll docs generated. Run again after spec/schema changes.')

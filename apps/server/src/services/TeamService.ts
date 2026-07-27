@@ -1,26 +1,17 @@
 import { db } from '@timegems/db'
-import { decodeCursor, encodeCursor, normalizeLimit } from '../lib/pagination'
+import { cursorOrderBy, cursorWhere, decodeCursor, normalizeLimit, paginate } from '../lib/pagination'
+import { HttpError } from '../lib/errors'
 
 export class TeamService {
   async list(tenantId: string, opts: { cursor?: string; limit?: number }) {
     const limit = normalizeLimit(opts.limit)
     const cursor = decodeCursor(opts.cursor)
     const teams = await db.team.findMany({
-      where: {
-        tenantId,
-        ...(cursor
-          ? {
-              OR: [
-                { createdAt: { lt: new Date(cursor.createdAt) } },
-                { createdAt: new Date(cursor.createdAt), id: { lt: cursor.id } },
-              ],
-            }
-          : {}),
-      },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      where: { tenantId, ...cursorWhere(cursor) },
+      orderBy: cursorOrderBy,
       take: limit + 1,
     })
-    return this.paginate(teams, limit)
+    return paginate(teams, limit)
   }
 
   async create(tenantId: string, data: { name: string }) {
@@ -29,7 +20,7 @@ export class TeamService {
 
   async get(tenantId: string, teamId: string) {
     const team = await db.team.findFirst({ where: { id: teamId, tenantId } })
-    if (!team) throw { statusCode: 404, message: 'Team not found' }
+    if (!team) throw new HttpError(404, 'Team not found')
     return team
   }
 
@@ -38,56 +29,72 @@ export class TeamService {
     return db.team.update({ where: { id: teamId }, data })
   }
 
-  async listMembers(tenantId: string, teamId: string, opts: { cursor?: string; limit?: number }) {
+  async listMembers(tenantId: string, teamId: string, opts: { cursor?: string; limit?: number; q?: string }) {
     await this.get(tenantId, teamId)
     const limit = normalizeLimit(opts.limit)
     const cursor = decodeCursor(opts.cursor)
     const memberships = await db.teamMembership.findMany({
       where: {
         teamId,
-        ...(cursor
-          ? {
-              OR: [
-                { createdAt: { lt: new Date(cursor.createdAt) } },
-                { createdAt: new Date(cursor.createdAt), id: { lt: cursor.id } },
-              ],
-            }
-          : {}),
+        user: {
+          memberships: { some: { tenantId } },
+          ...(opts.q
+            ? {
+                OR: [
+                  { name: { contains: opts.q } },
+                  { email: { contains: opts.q } },
+                ],
+              }
+            : {}),
+        },
+        ...cursorWhere(cursor),
       },
-      include: { user: true },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      include: {
+        user: {
+          include: {
+            memberships: {
+              where: { tenantId },
+              select: { role: true },
+            },
+          },
+        },
+      },
+      orderBy: cursorOrderBy,
       take: limit + 1,
     })
-    const { data, meta } = this.paginate(memberships, limit)
-    return { data: data.map((m) => m.user), meta }
+    const { data, meta } = paginate(memberships, limit)
+    return {
+      data: data.map((membership) => {
+        const { memberships, ...user } = membership.user
+        return { ...user, tenantRole: memberships[0]!.role }
+      }),
+      meta,
+    }
   }
 
-  async addMember(tenantId: string, teamId: string, userId: string) {
+  async addMembers(tenantId: string, teamId: string, userIds: string[]) {
     await this.get(tenantId, teamId)
-    const membership = await db.membership.findUnique({ where: { userId_tenantId: { userId, tenantId } } })
-    if (!membership) throw { statusCode: 400, message: 'User is not a member of this tenant' }
-
-    const user = await db.user.findUnique({ where: { id: userId } })
-    if (!user) throw { statusCode: 404, message: 'User not found' }
-
-    await db.teamMembership.upsert({
-      where: { teamId_userId: { teamId, userId } },
-      create: { teamId, userId },
-      update: {},
+    const memberships = await db.membership.findMany({
+      where: { tenantId, userId: { in: userIds } },
+      include: { user: true },
     })
-    return user
+    if (memberships.length !== userIds.length) {
+      throw new HttpError(400, 'Every selected user must be a member of this tenant')
+    }
+
+    await db.teamMembership.createMany({
+      data: userIds.map((userId) => ({ teamId, userId })),
+      skipDuplicates: true,
+    })
+    const byUserId = new Map(memberships.map((membership) => [membership.userId, membership]))
+    return userIds.map((userId) => {
+      const membership = byUserId.get(userId)!
+      return { ...membership.user, tenantRole: membership.role }
+    })
   }
 
   async removeMember(tenantId: string, teamId: string, userId: string) {
     await this.get(tenantId, teamId)
     await db.teamMembership.deleteMany({ where: { teamId, userId } })
-  }
-
-  private paginate<T extends { createdAt: Date; id: string }>(rows: T[], limit: number) {
-    const hasMore = rows.length > limit
-    const items = hasMore ? rows.slice(0, limit) : rows
-    const last = items[items.length - 1]
-    const nextCursor = hasMore && last ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id }) : null
-    return { data: items, meta: { hasMore, nextCursor } }
   }
 }

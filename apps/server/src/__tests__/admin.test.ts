@@ -139,6 +139,9 @@ describe('adminRunAgentEmployee', () => {
     expect(res.statusCode).toBe(201)
     await validateResponse('adminRunAgentEmployee', 201, res.json())
     expect(res.json().data.type).toBe('SUMMARY')
+
+    const updated = await db.agentEmployee.findUnique({ where: { id: employee.id } })
+    expect(updated?.lastRunAt).not.toBeNull()
   })
 
   it('QA flags sessions closed with no notes', async () => {

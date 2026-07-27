@@ -58,17 +58,77 @@ components:
         error: { type: string }
         code: { type: string }
 
+    # ── Enums (named so every usage site shares one definition) ────────────
+    TenantPlan:
+      type: string
+      enum: [FREE, TEAM, ENTERPRISE]
+
+    TenantRole:
+      type: string
+      enum: [OWNER, ADMIN, MEMBER]
+
+    Capability:
+      type: string
+      enum: [team:manage, project:manage, session:manage, site:admin]
+
+    WorkSessionIntervalKind:
+      type: string
+      enum: [ACTIVE, PAUSED]
+
+    WorkSessionStatus:
+      type: string
+      enum: [RUNNING, PAUSED, REVIEWING, STOPPED]
+
+    ReportPeriod:
+      type: string
+      enum: [day, week, month, year]
+
+    ReportScope:
+      type: string
+      enum: [individual, team]
+
+    AgentReportType:
+      type: string
+      enum: [SUMMARY, REVIEW, PROPOSAL, GOAL]
+
+    AgentReportChannel:
+      type: string
+      enum: [feed, discord, github, doc]
+
+    AgentEmployeeKind:
+      type: string
+      enum: [SUMMARIZER, QA, PM, CODE_REVIEW, STEERING, CUSTOM]
+
+    GoalStatus:
+      type: string
+      enum: [PROPOSED, ACTIVE, DONE, DROPPED]
+
+    TextAssistMode:
+      type: string
+      enum: [enhance, summarize]
+
     # ── Identity ──────────────────────────────────────────────────────────
     User:
       type: object
-      required: [id, email, name, createdAt]
+      required: [id, name, isAnonymous, createdAt]
       properties:
         id: { type: string }
-        email: { type: string }
+        email: { type: [string, 'null'] }
         name: { type: string }
         avatarUrl: { type: [string, 'null'] }
+        isAnonymous:
+          type: boolean
+          description: True until any credential (password or Google) is added via /auth/claim or /auth/claim/google.
         suspendedAt: { type: [string, 'null'], format: date-time }
         createdAt: { type: string, format: date-time }
+
+    TenantMember:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          required: [tenantRole]
+          properties:
+            tenantRole: { $ref: '#/components/schemas/TenantRole' }
 
     AuthResponse:
       type: object
@@ -76,6 +136,25 @@ components:
       properties:
         data: { $ref: '#/components/schemas/User' }
       # Session token delivered via Set-Cookie (httpOnly) -- not in the body.
+
+    CurrentUserContext:
+      type: object
+      required: [user, tenant, capabilities]
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        tenant:
+          oneOf:
+            - $ref: '#/components/schemas/TenantSummary'
+            - type: 'null'
+        capabilities:
+          type: array
+          items: { $ref: '#/components/schemas/Capability' }
+
+    CurrentUserResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/CurrentUserContext' }
 
     GoogleAuthInput:
       type: object
@@ -85,6 +164,28 @@ components:
           type: string
           description: Google ID token from the Sign-In button callback
 
+    RegisterInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8, maxLength: 200 }
+        name: { type: string, minLength: 1, maxLength: 100 }
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 1, maxLength: 200 }
+
+    ClaimEmailInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8, maxLength: 200 }
+
     # ── Tenancy ───────────────────────────────────────────────────────────
     Tenant:
       type: object
@@ -93,7 +194,7 @@ components:
         id: { type: string }
         name: { type: string }
         slug: { type: string }
-        plan: { type: string, enum: [FREE, TEAM, ENTERPRISE] }
+        plan: { $ref: '#/components/schemas/TenantPlan' }
         createdAt: { type: string, format: date-time }
 
     TenantSummary:
@@ -102,7 +203,7 @@ components:
         - type: object
           required: [role]
           properties:
-            role: { type: string, enum: [OWNER, ADMIN, MEMBER] }
+            role: { $ref: '#/components/schemas/TenantRole' }
 
     CreateTenantInput:
       type: object
@@ -131,13 +232,47 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 100 }
 
-    AddTeamMemberInput:
+    AddTeamMembersInput:
       type: object
-      required: [userId]
+      required: [userIds]
       properties:
-        userId: { type: string }
+        userIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items: { type: string }
 
     # ── Projects ──────────────────────────────────────────────────────────
+    GemType:
+      type: object
+      required: [id, projectId, name, icon, color, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        name: { type: string }
+        icon: { type: string }
+        color: { type: string }
+        description: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+
+    CreateGemTypeInput:
+      type: object
+      required: [name, icon, color]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 50 }
+        icon: { type: string, minLength: 1, maxLength: 50 }
+        color: { type: string, minLength: 1, maxLength: 20 }
+        description: { type: string, maxLength: 500 }
+
+    UpdateGemTypeInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 50 }
+        icon: { type: string, minLength: 1, maxLength: 50 }
+        color: { type: string, minLength: 1, maxLength: 20 }
+        description: { type: [string, 'null'], maxLength: 500 }
+
     Project:
       type: object
       required: [id, tenantId, name, createdAt]
@@ -149,6 +284,10 @@ components:
         color: { type: [string, 'null'] }
         archivedAt: { type: [string, 'null'], format: date-time }
         createdAt: { type: string, format: date-time }
+        gemType:
+          oneOf:
+            - $ref: '#/components/schemas/GemType'
+            - type: 'null'
 
     CreateProjectInput:
       type: object
@@ -157,6 +296,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 100 }
         teamId: { type: [string, 'null'] }
         color: { type: [string, 'null'] }
+        gemType: { $ref: '#/components/schemas/CreateGemTypeInput' }
 
     UpdateProjectInput:
       type: object
@@ -165,11 +305,12 @@ components:
         teamId: { type: [string, 'null'] }
         color: { type: [string, 'null'] }
         archived: { type: boolean }
+        gemType: { $ref: '#/components/schemas/UpdateGemTypeInput' }
 
     # ── Core work loop ────────────────────────────────────────────────────
     Note:
       type: object
-      required: [id, workSessionId, authorId, body, isStopSummary, createdAt]
+      required: [id, workSessionId, authorId, body, isStopSummary, createdAt, updatedAt]
       properties:
         id: { type: string }
         workSessionId: { type: string }
@@ -177,9 +318,16 @@ components:
         body: { type: string }
         isStopSummary: { type: boolean }
         createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
         author: { $ref: '#/components/schemas/User' }
 
     CreateNoteInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 5000 }
+
+    UpdateNoteInput:
       type: object
       required: [body]
       properties:
@@ -190,26 +338,33 @@ components:
       required: [id, kind, startedAt]
       properties:
         id: { type: string }
-        kind: { type: string, enum: [ACTIVE, PAUSED] }
+        kind: { $ref: '#/components/schemas/WorkSessionIntervalKind' }
         startedAt: { type: string, format: date-time }
         endedAt: { type: [string, 'null'], format: date-time }
 
     WorkSession:
       type: object
-      required: [id, tenantId, userId, status, startedAt, activeDurationSec, createdAt]
+      required: [id, tenantId, userId, status, startedAt, activeDurationSec, createdAt, updatedAt]
       properties:
         id: { type: string }
         tenantId: { type: string }
         userId: { type: string }
         projectId: { type: [string, 'null'] }
-        status: { type: string, enum: [RUNNING, PAUSED, STOPPED] }
+        goalId: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/WorkSessionStatus' }
         startedAt: { type: string, format: date-time }
         stoppedAt: { type: [string, 'null'], format: date-time }
         activeDurationSec: { type: integer }
+        correctedAt: { type: [string, 'null'], format: date-time }
         createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
         project:
           oneOf:
             - $ref: '#/components/schemas/Project'
+            - type: 'null'
+        goal:
+          oneOf:
+            - $ref: '#/components/schemas/Goal'
             - type: 'null'
         user: { $ref: '#/components/schemas/User' }
 
@@ -224,16 +379,40 @@ components:
             intervals:
               type: array
               items: { $ref: '#/components/schemas/WorkSessionInterval' }
+            gemsAwarded:
+              type: [integer, 'null']
+              description: Gems committed to the ledger for this session. Null until STOPPED, or if the project has no gem type.
+
+    WorkSessionHistoryItem:
+      allOf:
+        - $ref: '#/components/schemas/WorkSession'
+        - type: object
+          required: [notes, gemsAwarded]
+          properties:
+            notes:
+              type: array
+              items: { $ref: '#/components/schemas/Note' }
+            gemsAwarded:
+              type: [integer, 'null']
+              description: Gems committed to the ledger for this session. Null until STOPPED, or if the project has no gem type.
 
     StartWorkSessionInput:
       type: object
       properties:
         projectId: { type: [string, 'null'] }
+        goalId: { type: [string, 'null'] }
 
     UpdateWorkSessionInput:
       type: object
       properties:
         projectId: { type: [string, 'null'] }
+        goalId:
+          type: [string, 'null']
+          description: If the goal has a projectId, the session's own projectId must match it.
+        activeDurationSec:
+          type: integer
+          minimum: 0
+          description: Manual correction of a STOPPED session's duration. Triggers a full gem-ledger recompute for this user+project.
 
     StopWorkSessionInput:
       type: object
@@ -243,25 +422,45 @@ components:
     # ── Reporting ─────────────────────────────────────────────────────────
     TimeSummaryEntry:
       type: object
-      required: [projectId, projectName, durationSec]
+      required: [projectId, projectName, durationSec, gemsEarned]
       properties:
         projectId: { type: [string, 'null'] }
         projectName: { type: [string, 'null'] }
         userId: { type: string }
         durationSec: { type: integer }
+        gemsEarned:
+          type: integer
+          description: Aggregate only — never render as a per-member ranking (see functional-design.md).
 
     TimeSummary:
       type: object
-      required: [period, date, scope, totalDurationSec, entries]
+      required: [period, date, scope, totalDurationSec, totalGemsEarned, sessionCount, projectsWorked, goalsAdvanced, entries]
       properties:
-        period: { type: string, enum: [day, month, year] }
+        period: { $ref: '#/components/schemas/ReportPeriod' }
         date: { type: string, format: date }
-        scope: { type: string, enum: [individual, team] }
+        scope: { $ref: '#/components/schemas/ReportScope' }
         teamId: { type: [string, 'null'] }
         totalDurationSec: { type: integer }
+        totalGemsEarned: { type: integer }
+        sessionCount: { type: integer }
+        projectsWorked: { type: integer }
+        goalsAdvanced: { type: integer }
         entries:
           type: array
           items: { $ref: '#/components/schemas/TimeSummaryEntry' }
+
+    # ── TimeGem economy ─────────────────────────────────────────────────────
+    GemBalance:
+      type: object
+      required: [projectId, projectName, gemType, totalGems, carrySec]
+      properties:
+        projectId: { type: string }
+        projectName: { type: string }
+        gemType: { $ref: '#/components/schemas/GemType' }
+        totalGems: { type: integer }
+        carrySec:
+          type: integer
+          description: Seconds of active work already banked toward this project's next gem.
 
     # ── AI agent workforce ────────────────────────────────────────────────
     AgentReport:
@@ -273,7 +472,7 @@ components:
         tenantId: { type: string }
         teamId: { type: [string, 'null'] }
         projectId: { type: [string, 'null'] }
-        type: { type: string, enum: [SUMMARY, REVIEW, PROPOSAL, GOAL] }
+        type: { $ref: '#/components/schemas/AgentReportType' }
         title: { type: string }
         body: { type: string }
         postedTo:
@@ -281,7 +480,7 @@ components:
           items:
             type: object
             properties:
-              channel: { type: string, enum: [feed, discord, github, doc] }
+              channel: { $ref: '#/components/schemas/AgentReportChannel' }
               ref: { type: [string, 'null'] }
         createdAt: { type: string, format: date-time }
 
@@ -291,17 +490,98 @@ components:
       properties:
         id: { type: string }
         tenantId: { type: string }
-        kind: { type: string, enum: [SUMMARIZER, QA, PM, CODE_REVIEW, STEERING, CUSTOM] }
+        kind: { $ref: '#/components/schemas/AgentEmployeeKind' }
         name: { type: string }
         enabled: { type: boolean }
         schedule: { type: string }
+        lastRunAt: { type: [string, 'null'], format: date-time }
         createdAt: { type: string, format: date-time }
+
+    # ── Goals ─────────────────────────────────────────────────────────────
+    Goal:
+      type: object
+      required: [id, tenantId, title, description, status, progressPercent, complexityScore, createdAt]
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        teamId: { type: [string, 'null'] }
+        projectId: { type: [string, 'null'] }
+        createdByUserId: { type: [string, 'null'] }
+        title: { type: string }
+        description: { type: string }
+        status: { $ref: '#/components/schemas/GoalStatus' }
+        progressPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        complexityScore:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Relative sizing, 1 (trivial) to 5 (very complex) -- not a time estimate on its own.
+        estimatedHours: { type: [number, 'null'] }
+        loggedSec:
+          type: integer
+          description: Live aggregate of activeDurationSec across all STOPPED WorkSessions tagged with this goal -- computed on read, never stored.
+        sourceAgentReportId: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+
+    CreateGoalInput:
+      type: object
+      required: [title, description]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 5000 }
+        teamId: { type: [string, 'null'] }
+        projectId: { type: [string, 'null'] }
+        complexityScore: { type: integer, minimum: 1, maximum: 5 }
+        estimatedHours: { type: [number, 'null'], minimum: 0 }
+
+    ProjectGoalImportRow:
+      type: object
+      additionalProperties: false
+      required: [title, description]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 5000 }
+        complexityScore: { type: integer, minimum: 1, maximum: 5 }
+        estimatedHours: { type: [number, 'null'], minimum: 0 }
+
+    ImportProjectGoalsInput:
+      type: object
+      additionalProperties: false
+      required: [goals]
+      properties:
+        goals:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: { $ref: '#/components/schemas/ProjectGoalImportRow' }
+
+    UpdateGoalInput:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 5000 }
+        projectId: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/GoalStatus' }
+        progressPercent: { type: integer, minimum: 0, maximum: 100 }
+        complexityScore: { type: integer, minimum: 1, maximum: 5 }
+        estimatedHours: { type: [number, 'null'], minimum: 0 }
+
+    # ── Text assist ───────────────────────────────────────────────────────
+    CreateTextAssistInput:
+      type: object
+      required: [text, mode]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 20000 }
+        mode: { $ref: '#/components/schemas/TextAssistMode' }
 
     # ── Admin ─────────────────────────────────────────────────────────────
     AdminUpdateTenantInput:
       type: object
       properties:
-        plan: { type: string, enum: [FREE, TEAM, ENTERPRISE] }
+        plan: { $ref: '#/components/schemas/TenantPlan' }
         suspended: { type: boolean }
 
     AdminUpdateUserInput:
@@ -316,7 +596,7 @@ paths:
       operationId: googleAuth
       security: []
       tags: [auth]
-      summary: Sign in or register with Google (the only auth method in V1)
+      summary: Sign in or register with Google
       requestBody:
         required: true
         content:
@@ -336,6 +616,157 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Account suspended
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '503':
+          description: Google sign-in is not configured
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /auth/anonymous:
+    post:
+      operationId: anonymousAuth
+      security: []
+      tags: [auth]
+      summary: Create an instant guest account (auto-assigned name, personal tenant) -- no request body
+      responses:
+        '201':
+          description: Guest session created -- session token delivered via Set-Cookie (httpOnly)
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '429':
+          description: Too many guest accounts created from this IP recently
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /auth/register:
+    post:
+      operationId: registerWithEmail
+      security: []
+      tags: [auth]
+      summary: Register with email + password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterInput' }
+      responses:
+        '201':
+          description: Registered -- session token delivered via Set-Cookie (httpOnly)
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400':
+          description: Invalid email or password too short
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '409':
+          description: An account with this email already exists
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /auth/login:
+    post:
+      operationId: loginWithEmail
+      security: []
+      tags: [auth]
+      summary: Sign in with email + password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginInput' }
+      responses:
+        '200':
+          description: Authenticated -- session token delivered via Set-Cookie (httpOnly)
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '401':
+          description: Invalid email or password
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Account suspended
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /auth/claim:
+    post:
+      operationId: claimWithEmail
+      tags: [auth]
+      summary: Add email + password to the current (e.g. anonymous) user in place -- never creates a second account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClaimEmailInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          description: Invalid email or password too short
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '409':
+          description: An account with this email already exists
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '200':
+          description: Account updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+
+  /auth/claim/google:
+    post:
+      operationId: claimWithGoogle
+      tags: [auth]
+      summary: Link a Google identity to the current (e.g. anonymous) user in place -- never creates a second account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GoogleAuthInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          description: Invalid Google credential
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '409':
+          description: This Google account is already linked to a different user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '200':
+          description: Account updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
 
   /auth/logout:
     post:
@@ -361,10 +792,10 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '200':
-          description: Current user
+          description: Current user, active tenant, and server-derived capabilities
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/AuthResponse' }
+              schema: { $ref: '#/components/schemas/CurrentUserResponse' }
 
   # ── Tenants ─────────────────────────────────────────────────────────────
   /tenants:
@@ -529,6 +960,7 @@ paths:
           schema: { type: string }
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/SearchQuery'
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -542,7 +974,7 @@ paths:
                 properties:
                   data:
                     type: array
-                    items: { $ref: '#/components/schemas/User' }
+                    items: { $ref: '#/components/schemas/TenantMember' }
                   meta: { $ref: '#/components/schemas/PaginatedMeta' }
     post:
       operationId: addTeamMember
@@ -556,18 +988,20 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/AddTeamMemberInput' }
+            schema: { $ref: '#/components/schemas/AddTeamMembersInput' }
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '201':
-          description: Member added
+          description: Members added
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  data: { $ref: '#/components/schemas/User' }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/TenantMember' }
 
   /teams/{teamId}/members/{userId}:
     delete:
@@ -594,6 +1028,60 @@ paths:
                 properties:
                   data: { type: 'null' }
 
+  /users:
+    get:
+      operationId: listTenantMembers
+      tags: [users]
+      summary: Search members of the active tenant for team management
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/SearchQuery'
+        - in: query
+          name: excludeTeamId
+          schema: { type: string }
+          description: Exclude users who already belong to this tenant-scoped team.
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Paginated tenant members
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/TenantMember' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+
+  /users/{userId}:
+    get:
+      operationId: getUser
+      tags: [users]
+      description: >-
+        Tenant-scoped -- the requester and the target user must share a
+        tenant (same check TeamService.addMember already uses), so this
+        can't be used to look up an arbitrary user platform-wide.
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: User
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+
   # ── Projects ────────────────────────────────────────────────────────────
   /projects:
     get:
@@ -606,6 +1094,9 @@ paths:
         - in: query
           name: teamId
           schema: { type: string }
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/WorkSessionStatus' }
         - in: query
           name: archived
           schema: { type: boolean, default: false }
@@ -756,7 +1247,7 @@ paths:
     patch:
       operationId: updateWorkSession
       tags: [workSessions]
-      summary: Change the project tagged to an in-progress session
+      summary: Correct a session's duration, project, or goal; stopped-session corrections recompute gem ledgers
       parameters:
         - in: path
           name: workSessionId
@@ -778,6 +1269,26 @@ paths:
                 type: object
                 properties:
                   data: { $ref: '#/components/schemas/WorkSessionDetail' }
+    delete:
+      operationId: deleteWorkSession
+      tags: [workSessions]
+      summary: Delete a stopped session (owner or tenant admin); recomputes the gem ledger
+      parameters:
+        - in: path
+          name: workSessionId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Work session deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: 'null' }
 
   /work-sessions/{workSessionId}/pause:
     post:
@@ -821,11 +1332,33 @@ paths:
                 properties:
                   data: { $ref: '#/components/schemas/WorkSessionDetail' }
 
+  /work-sessions/{workSessionId}/review:
+    post:
+      operationId: reviewWorkSession
+      tags: [workSessions]
+      summary: Authoritatively stop timing and move the active session into review
+      parameters:
+        - in: path
+          name: workSessionId
+          required: true
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Work session is awaiting final review
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/WorkSessionDetail' }
+
   /work-sessions/{workSessionId}/stop:
     post:
       operationId: stopWorkSession
       tags: [workSessions]
-      summary: Stop and close the session; optionally attach a final note
+      summary: Finish a session that is awaiting review; optionally attach a final note
       parameters:
         - in: path
           name: workSessionId
@@ -862,6 +1395,9 @@ paths:
           name: projectId
           schema: { type: string }
         - in: query
+          name: goalId
+          schema: { type: string }
+        - in: query
           name: teamId
           schema: { type: string }
         - in: query
@@ -883,7 +1419,7 @@ paths:
                 properties:
                   data:
                     type: array
-                    items: { $ref: '#/components/schemas/WorkSession' }
+                    items: { $ref: '#/components/schemas/WorkSessionHistoryItem' }
                   meta: { $ref: '#/components/schemas/PaginatedMeta' }
 
   /work-sessions/{workSessionId}/notes:
@@ -938,6 +1474,33 @@ paths:
                 properties:
                   data: { $ref: '#/components/schemas/Note' }
 
+  /notes/{noteId}:
+    patch:
+      operationId: updateNote
+      tags: [notes]
+      summary: Correct a saved note as the session owner or a tenant session manager
+      parameters:
+        - in: path
+          name: noteId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateNoteInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Note corrected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Note' }
+
   # ── Reporting ───────────────────────────────────────────────────────────
   /reports/time-summary:
     get:
@@ -948,7 +1511,7 @@ paths:
         - in: query
           name: period
           required: true
-          schema: { type: string, enum: [day, month, year] }
+          schema: { $ref: '#/components/schemas/ReportPeriod' }
         - in: query
           name: date
           required: true
@@ -957,11 +1520,19 @@ paths:
         - in: query
           name: scope
           required: true
-          schema: { type: string, enum: [individual, team] }
+          schema: { $ref: '#/components/schemas/ReportScope' }
         - in: query
           name: teamId
           schema: { type: string }
           description: Required when scope=team
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+          description: Exact inclusive period boundary, supplied with `to` for the viewer's local timezone.
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+          description: Exact exclusive period boundary, supplied with `from` for the viewer's local timezone.
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -973,6 +1544,27 @@ paths:
                 type: object
                 properties:
                   data: { $ref: '#/components/schemas/TimeSummary' }
+
+  # ── TimeGem economy ───────────────────────────────────────────────────────
+  /gem-balances:
+    get:
+      operationId: listGemBalances
+      tags: [gems]
+      summary: Current user's Gem Bank — totals and carry progress by project
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Gem balances
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/GemBalance' }
 
   # ── AI agent workforce ──────────────────────────────────────────────────
   /agent-reports:
@@ -991,7 +1583,7 @@ paths:
           schema: { type: string }
         - in: query
           name: type
-          schema: { type: string, enum: [SUMMARY, REVIEW, PROPOSAL, GOAL] }
+          schema: { $ref: '#/components/schemas/AgentReportType' }
       responses:
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -1028,6 +1620,159 @@ paths:
                 type: object
                 properties:
                   data: { $ref: '#/components/schemas/AgentReport' }
+
+  # ── Goals ─────────────────────────────────────────────────────────────────
+  # A Goal (agent-proposed via Steering, or authored directly by a human for
+  # project planning) is the unit of planning: it can be scoped to a Project,
+  # carries a completeness percentage and a complexity score, and WorkSessions
+  # can be tagged with one so logged time rolls up against it. An
+  # agent-sourced goal is still inert (PROPOSED) until a human acts on it here
+  # -- "agents only propose" is only a real rule if there's a page where a
+  # human can approve or drop the proposal. Human-authored goals skip that
+  # gate (they start ACTIVE) since nobody needs to approve their own goal.
+  /goals:
+    get:
+      operationId: listGoals
+      tags: [goals]
+      summary: Goals for the active tenant, any status
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/GoalStatus' }
+        - in: query
+          name: projectId
+          schema: { type: string }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Paginated goals
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Goal' }
+                  meta: { $ref: '#/components/schemas/PaginatedMeta' }
+    post:
+      operationId: createGoal
+      tags: [goals]
+      summary: Author a goal directly for project planning (starts ACTIVE, no approval gate)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateGoalInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '201':
+          description: Goal created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Goal' }
+
+  /goals/{goalId}:
+    patch:
+      operationId: updateGoal
+      tags: [goals]
+      summary: Approve/drop/complete a proposed goal, or edit any goal's planning fields
+      parameters:
+        - in: path
+          name: goalId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateGoalInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Goal updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Goal' }
+
+  /projects/{projectId}/goals/import:
+    post:
+      operationId: importProjectGoals
+      tags: [goals]
+      summary: Atomically import ACTIVE goals into one project
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ImportProjectGoalsInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Project not found in the active tenant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '201':
+          description: Goals imported
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [imported]
+                    properties:
+                      imported: { type: integer, minimum: 1, maximum: 500 }
+
+  /text-assist:
+    post:
+      operationId: createTextAssist
+      tags: [textAssist]
+      description: >-
+        Heuristic (not a real LLM call yet) -- same documented-placeholder
+        pattern as AgentEmployeeService, so a real model call can replace
+        the transform logic later without changing this contract.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTextAssistInput' }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Transformed text
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [result]
+                    properties:
+                      result: { type: string }
 
   # ── Admin ───────────────────────────────────────────────────────────────
   /admin/tenants:

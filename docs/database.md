@@ -13,8 +13,13 @@
 - `TeamMembership`
 - `Project`
 - `WorkSession`
+- `UserActiveSession`
 - `WorkSessionInterval`
 - `Note`
+- `GemType`
+- `GemLedgerEntry`
+- `GemBalance`
+- `GemAccount`
 - `AgentEmployee`
 - `AgentReport`
 - `Goal`

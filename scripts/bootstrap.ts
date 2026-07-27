@@ -24,10 +24,8 @@ console.log('🚀 Bootstrapping project...\n')
 
 run('pnpm install', 'Install dependencies')
 run('pnpm --filter @timegems/db exec prisma generate', 'Generate Prisma client')
-run('pnpm db:push', 'Push schema to database')
-run('pnpm sdk:generate', 'Generate SDK types from OpenAPI spec')
-run('pnpm pages:generate', 'Generate page stubs from spec')
-run('pnpm test:generate', 'Generate test stubs from spec')
+run('pnpm db:migrate', 'Apply database migrations')
+run('pnpm generate', 'Generate SDK types, test stubs, opted-in pages, and docs')
 run('pnpm db:seed', 'Seed development data')
 
 console.log('\n✅  Bootstrap complete.')

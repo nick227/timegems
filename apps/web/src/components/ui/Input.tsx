@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 import { useSpeechRecognition } from './voice/useSpeechRecognition'
 import { VoiceButton } from './voice/VoiceButton'
 
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   voice?: boolean
   onVoiceResult?: (transcript: string) => void
   onVoiceError?: (error: string) => void
@@ -41,6 +41,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             onClick={speech.toggle}
             className="absolute right-2"
           />
+        )}
+        {speech.interimTranscript && (
+          <span
+            role="status"
+            className="pointer-events-none absolute right-9 max-w-[70%] truncate rounded bg-surface px-1.5 py-0.5 text-xs text-muted-foreground shadow"
+          >
+            {speech.interimTranscript}
+          </span>
         )}
       </div>
     )

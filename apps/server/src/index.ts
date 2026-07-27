@@ -3,12 +3,17 @@ import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
+import websocket from '@fastify/websocket'
 import openapiGlue from 'fastify-openapi-glue'
 import { load } from 'js-yaml'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import * as handlers from './handlers'
 import * as security from './plugins/security'
+import { registerPresence } from './presence'
+import { registerUploads } from './uploads'
+import { startScheduler } from './scheduler'
+import { registerErrorHandler } from './lib/errorHandler'
 
 const server = Fastify({ logger: true })
 
@@ -27,38 +32,30 @@ async function main() {
   // cookies — must register before glue so request.cookies is populated
   await server.register(cookie)
 
+  // WebSocket support for live presence (see presence.ts) — not part of the
+  // OpenAPI-driven REST surface, registered directly.
+  await server.register(websocket)
+
   // live swagger UI at /docs in dev
   await server.register(swagger, { openapi: spec })
   await server.register(swaggerUi, { routePrefix: '/docs' })
 
-  // global error handler — maps known shapes to HTTP responses
-  server.setErrorHandler((error, _request, reply) => {
-    if (error.validation) {
-      return reply.status(400).send({ error: 'Validation failed', details: error.validation })
-    }
-    if (error.statusCode) {
-      return reply.status(error.statusCode).send({ error: error.message })
-    }
-    if ((error as any).code === 'P2025') {
-      return reply.status(404).send({ error: 'Not found' })
-    }
-    if ((error as any).code === 'P2002') {
-      return reply.status(409).send({ error: 'Already exists' })
-    }
-    server.log.error(error)
-    return reply.status(500).send({ error: 'Internal server error' })
-  })
+  registerErrorHandler(server)
 
   // spec-driven routing — operationId → handler export, security scheme → handler
   await server.register(openapiGlue, {
     specification: specPath,
-    service: handlers,
+    serviceHandlers: handlers,
     securityHandlers: security,
     noAdditional: true,
   } as any)
 
   // health check — not in spec, always public
   server.get('/health', async () => ({ status: 'ok' }))
+
+  registerPresence(server)
+  await registerUploads(server)
+  startScheduler()
 
   await server.listen({
     port: Number(process.env.PORT ?? 3001),

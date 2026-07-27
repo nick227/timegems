@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 type SpeechRecognitionResultLike = {
   readonly [index: number]: { transcript: string }
+  readonly isFinal: boolean
 }
 
 type SpeechRecognitionResultListLike = {
@@ -12,7 +13,7 @@ type SpeechRecognitionResultListLike = {
 type SpeechRecognitionLike = {
   continuous: boolean
   interimResults: boolean
-  onresult: ((event: { results: SpeechRecognitionResultListLike }) => void) | null
+  onresult: ((event: { resultIndex: number; results: SpeechRecognitionResultListLike }) => void) | null
   onerror: ((event: { error: string }) => void) | null
   onend: (() => void) | null
   start: () => void
@@ -44,6 +45,7 @@ function getSpeechRecognition(): SpeechRecognitionCtor | null {
 export function useSpeechRecognition({ continuous, onResult, onError }: Options = {}) {
   const [listening, setListening] = useState(false)
   const [supported, setSupported] = useState(false)
+  const [interimTranscript, setInterimTranscript] = useState('')
   const recognitionRef = useRef<SpeechRecognition | null>(null)
 
   useEffect(() => {
@@ -53,6 +55,7 @@ export function useSpeechRecognition({ continuous, onResult, onError }: Options 
   const stop = useCallback(() => {
     recognitionRef.current?.stop()
     recognitionRef.current = null
+    setInterimTranscript('')
     setListening(false)
   }, [])
 
@@ -67,15 +70,27 @@ export function useSpeechRecognition({ continuous, onResult, onError }: Options 
 
     const recognition = new SpeechRecognition()
     recognition.continuous = Boolean(continuous)
-    recognition.interimResults = false
+    recognition.interimResults = true
     recognition.onresult = (event) => {
-      const transcript = Array.from({ length: event.results.length }, (_, index) => event.results[index])
-        .map((result) => result?.[0]?.transcript ?? '')
-        .join(' ')
-      onResult?.(transcript)
+      let interim = ''
+      let final = ''
+      for (let index = event.resultIndex; index < event.results.length; index++) {
+        const result = event.results[index]
+        const transcript = result?.[0]?.transcript ?? ''
+        if (result?.isFinal) final += transcript
+        else interim += transcript
+      }
+      setInterimTranscript(interim.trim())
+      if (final.trim()) onResult?.(final.trim())
     }
-    recognition.onerror = (event) => onError?.(event.error)
-    recognition.onend = () => setListening(false)
+    recognition.onerror = (event) => {
+      setInterimTranscript('')
+      onError?.(event.error)
+    }
+    recognition.onend = () => {
+      setInterimTranscript('')
+      setListening(false)
+    }
     recognition.start()
     recognitionRef.current = recognition
     setListening(true)
@@ -88,5 +103,5 @@ export function useSpeechRecognition({ continuous, onResult, onError }: Options 
 
   useEffect(() => stop, [stop])
 
-  return { supported, listening, start, stop, toggle }
+  return { supported, listening, interimTranscript, start, stop, toggle }
 }

@@ -11,11 +11,16 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: 1,
   reporter: 'list',
+  globalSetup: './e2e/global-setup.ts',
 
   use: {
     baseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // Authenticated by default via the e2e fixture session from
+    // global-setup.ts; tests that need a logged-out context override this
+    // with `test.use({ storageState: { cookies: [], origins: [] } })`.
+    storageState: './e2e/.auth/e2e-user.json',
   },
 
   projects: [

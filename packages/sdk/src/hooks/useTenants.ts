@@ -36,8 +36,11 @@ export function useSelectActiveTenant() {
       if (error) throw new ApiError(response.status, (error as any).error)
       return data!
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tenants'] })
+    onSuccess: async () => {
+      // The active tenant determines both authorization capabilities and
+      // every tenant-scoped query result. Refresh the whole client view so
+      // policy and cached data cannot remain associated with the old tenant.
+      await queryClient.invalidateQueries()
     },
   })
 }

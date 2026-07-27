@@ -1,0 +1,1 @@
+export { IntegrationsRoute } from './IntegrationsRoute'

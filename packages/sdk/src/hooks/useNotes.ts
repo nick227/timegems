@@ -34,3 +34,22 @@ export function useCreateNote(workSessionId: string) {
     },
   })
 }
+
+export function useUpdateNote() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ noteId, body }: { noteId: string; body: string }) => {
+      const { data, error, response } = await getApiClient().PATCH('/notes/{noteId}', {
+        params: { path: { noteId } },
+        body: { body },
+      })
+      if (error) throw new ApiError(response.status, (error as any).error)
+      return data!
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notes'] })
+      queryClient.invalidateQueries({ queryKey: ['work-session'] })
+      queryClient.invalidateQueries({ queryKey: ['work-sessions', 'list'] })
+    },
+  })
+}

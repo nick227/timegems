@@ -7,22 +7,29 @@
     "typecheck": "pnpm --recursive typecheck",
     "lint": "pnpm --recursive lint",
     "test": "pnpm --recursive test",
+    "test:affected": "pnpm test",
+    "check:fast": "pnpm typecheck && pnpm lint && pnpm generate:check",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm --filter web test:e2e && pnpm generate:check && pnpm build && pnpm db:migrate:status",
     "bootstrap": "tsx scripts/bootstrap.ts",
     "factory:add": "tsx scripts/factory-add.ts",
+    "generate": "pnpm sdk:generate && pnpm test:generate && pnpm pages:generate && pnpm docs:generate",
+    "generate:check": "pnpm sdk:check && pnpm test:generate --check && pnpm pages:generate --check && pnpm docs:generate --check",
     "sdk:generate": "pnpm --filter @timegems/sdk generate",
     "sdk:check": "tsx scripts/check-sdk-drift.ts",
     "test:generate": "tsx scripts/generate-tests.ts",
     "docs:generate": "tsx scripts/generate-docs.ts",
     "pages:generate": "tsx scripts/generate-pages.ts",
-    "db:push": "pnpm --filter @timegems/db db:push",
+    "db:push": "node --env-file-if-exists=.env ./node_modules/prisma/build/index.js db push --schema packages/db/prisma/schema.prisma",
+    "db:migrate": "node --env-file-if-exists=.env ./node_modules/prisma/build/index.js migrate deploy --schema packages/db/prisma/schema.prisma",
+    "db:migrate:status": "node --env-file-if-exists=.env ./node_modules/prisma/build/index.js migrate status --schema packages/db/prisma/schema.prisma",
     "db:seed": "pnpm --filter @timegems/db db:seed",
     "db:studio": "pnpm --filter @timegems/db db:studio"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.0",
-    "eslint": "^8.0.0",
     "js-yaml": "^4.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0"
-  }
+  },
+  "packageManager": "pnpm@10.12.1+sha512.f0dda8580f0ee9481c5c79a1d927b9164f2c478e90992ad268bbb2465a736984391d6333d2c327913578b2804af33474ca554ba29c04a8b13060a717675ae3ac"
 }

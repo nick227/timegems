@@ -5,8 +5,8 @@ import { resolve } from 'path'
 const root = resolve(__dirname, '..')
 const specPath = resolve(root, 'packages/api-spec/openapi.yaml')
 const spec = load(readFileSync(specPath, 'utf-8')) as any
-const pagesDir = resolve(root, 'apps/web/src/pages')
-const appPath = resolve(root, 'apps/web/src/App.tsx')
+const pagesDir = resolve(root, 'apps/web/src/generated/pages')
+const checkMode = process.argv.includes('--check')
 
 mkdirSync(pagesDir, { recursive: true })
 
@@ -137,17 +137,14 @@ const SKIP_OP_IDS = /logout|^getCurrentUser$|readAll|markRead|^toggleFollow$|^to
 const SKIP_PATHS = /\/reactions|\/follows\/[^/]+$/
 
 function detectPattern(path: string, method: string, op: any): Pattern {
-  if (method === 'delete') return 'skip'
-  if (SKIP_OP_IDS.test(op.operationId)) return 'skip'
-  if (SKIP_PATHS.test(path)) return 'skip'
-
-  if (/login|register|signup/i.test(op.operationId)) return 'auth'
-
-  if (method === 'post') return 'create-form'
-  if (method === 'put' || method === 'patch') return 'edit-form'
-  if (method === 'get') return path.includes('{') ? 'detail' : 'list'
-
-  return 'skip'
+  const explicitPattern = op['x-timegems-page']
+  if (explicitPattern === undefined) return 'skip'
+  if (['list', 'detail', 'create-form', 'edit-form', 'auth'].includes(explicitPattern)) {
+    return explicitPattern
+  }
+  throw new Error(
+    `${method.toUpperCase()} ${path} has unsupported x-timegems-page value ${JSON.stringify(explicitPattern)}`,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -579,6 +576,7 @@ for (const [path, pathItem] of Object.entries<any>(spec.paths ?? {})) {
 const pages: PageEntry[] = []
 let generated = 0
 let skipped = 0
+let missing = 0
 
 for (const [path, pathItem] of Object.entries<any>(spec.paths ?? {})) {
   for (const [method, op] of Object.entries<any>(pathItem)) {
@@ -596,6 +594,9 @@ for (const [path, pathItem] of Object.entries<any>(spec.paths ?? {})) {
     if (existsSync(outPath)) {
       console.log(`  Skipped  ${name}.tsx`)
       skipped++
+    } else if (checkMode) {
+      console.error(`  Missing  ${name}.tsx`)
+      missing++
     } else {
       let content = ''
       switch (pattern) {
@@ -630,12 +631,13 @@ for (const [path, pathItem] of Object.entries<any>(spec.paths ?? {})) {
   }
 }
 
-// App.tsx — only generate if it doesn't exist
-if (existsSync(appPath)) {
-  console.log(`  Skipped  App.tsx`)
-} else {
-  writeFileSync(appPath, genAppTsx(pages))
-  console.log(`  Created  App.tsx`)
+if (checkMode && missing > 0) {
+  console.error(`\n❌ ${missing} opted-in generated page${missing === 1 ? '' : 's'} missing. Run \`pnpm pages:generate\`.`)
+  process.exit(1)
 }
 
-console.log(`\nDone — ${generated} created, ${skipped} skipped. Run \`pnpm dev\` to see them.`)
+console.log(
+  checkMode
+    ? `\n✓ Generated pages are present (${skipped} checked).`
+    : `\nDone — ${generated} created, ${skipped} skipped. Only operations with x-timegems-page are eligible.`,
+)

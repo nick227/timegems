@@ -1,0 +1,5 @@
+{
+  "duplicates": {
+    "ignore": ["packages/sdk/src/generated/**"]
+  }
+}

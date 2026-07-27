@@ -14,6 +14,7 @@
     "openapi-fetch": "^0.12.0"
   },
   "devDependencies": {
+    "@types/react": "^18.0.0",
     "openapi-typescript": "^7.0.0",
     "tsx": "^4.0.0"
   },

@@ -2,6 +2,7 @@
 // Run `pnpm test:generate` to add stubs for new routes.
 // Both test users are pre-seeded: use testOtherUserId for cross-user permission tests.
 import { describe, it, expect } from 'vitest'
+import { db } from '@timegems/db'
 import { buildTestApp, asAuth, validateResponse, testUserId, testOtherUserId, testTenantId } from './helpers'
 
 const app = buildTestApp()
@@ -67,5 +68,22 @@ describe('selectActiveTenant', () => {
       headers: asAuth(testUserId),
     })
     expect(res.statusCode).toBe(403)
+  })
+
+  it('does not switch away from an active work session', async () => {
+    const otherTenant = await db.tenant.create({ data: { name: 'Second Co', slug: 'second-co-switch-test' } })
+    await db.membership.create({ data: { userId: testUserId, tenantId: otherTenant.id, role: 'OWNER' } })
+    await db.workSession.create({
+      data: { tenantId: testTenantId, userId: testUserId, status: 'RUNNING' },
+    })
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${otherTenant.id}/select`,
+      headers: asAuth(testUserId),
+    })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toBe('Stop active work before switching tenants')
   })
 })

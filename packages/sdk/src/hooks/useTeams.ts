@@ -62,7 +62,7 @@ export function useUpdateTeam(teamId: string) {
   })
 }
 
-export function useTeamMembers(teamId: string, params?: { limit?: number }) {
+export function useTeamMembers(teamId: string, params?: { limit?: number; q?: string }) {
   return useInfiniteQuery({
     queryKey: ['team', teamId, 'members', params],
     initialPageParam: undefined as string | undefined,
@@ -78,19 +78,20 @@ export function useTeamMembers(teamId: string, params?: { limit?: number }) {
   })
 }
 
-export function useAddTeamMember(teamId: string) {
+export function useAddTeamMembers(teamId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (userId: string) => {
+    mutationFn: async (userIds: string[]) => {
       const { data, error, response } = await getApiClient().POST('/teams/{teamId}/members', {
         params: { path: { teamId } },
-        body: { userId },
+        body: { userIds },
       })
       if (error) throw new ApiError(response.status, (error as any).error)
       return data!
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['team', teamId, 'members'] })
+      queryClient.invalidateQueries({ queryKey: ['tenant-members'] })
     },
   })
 }
@@ -106,6 +107,7 @@ export function useRemoveTeamMember(teamId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['team', teamId, 'members'] })
+      queryClient.invalidateQueries({ queryKey: ['tenant-members'] })
     },
   })
 }

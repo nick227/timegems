@@ -6,7 +6,12 @@
 
 | Endpoint | Description | Auth | Success |
 |---|---|---|---|
-| `POST /auth/google` | Sign in or register with Google (the only auth method in V1) | Public | `200` |
+| `POST /auth/google` | Sign in or register with Google | Public | `200` |
+| `POST /auth/anonymous` | Create an instant guest account (auto-assigned name, personal tenant) -- no request body | Public | `201` |
+| `POST /auth/register` | Register with email + password | Public | `201` |
+| `POST /auth/login` | Sign in with email + password | Public | `200` |
+| `POST /auth/claim` | Add email + password to the current (e.g. anonymous) user in place -- never creates a second account | Auth required | `200` |
+| `POST /auth/claim/google` | Link a Google identity to the current (e.g. anonymous) user in place -- never creates a second account | Auth required | `200` |
 | `POST /auth/logout` | logout | Auth required | `200` |
 | `GET /auth/me` | getCurrentUser | Auth required | `200` |
 
@@ -30,6 +35,13 @@
 | `POST /teams/{teamId}/members` | addTeamMember | Auth required | `201` |
 | `DELETE /teams/{teamId}/members/{userId}` | removeTeamMember | Auth required | `200` |
 
+## Users
+
+| Endpoint | Description | Auth | Success |
+|---|---|---|---|
+| `GET /users` | Search members of the active tenant for team management | Auth required | `200` |
+| `GET /users/{userId}` | getUser | Auth required | `200` |
+
 ## Projects
 
 | Endpoint | Description | Auth | Success |
@@ -46,10 +58,12 @@
 | `GET /work-sessions/active` | The current user's running/paused session in the active tenant, if any | Auth required | `200` |
 | `POST /work-sessions/start` | startWorkSession | Auth required | `201` |
 | `GET /work-sessions/{workSessionId}` | getWorkSession | Auth required | `200` |
-| `PATCH /work-sessions/{workSessionId}` | Change the project tagged to an in-progress session | Auth required | `200` |
+| `PATCH /work-sessions/{workSessionId}` | Correct a session's duration, project, or goal; stopped-session corrections recompute gem ledgers | Auth required | `200` |
+| `DELETE /work-sessions/{workSessionId}` | Delete a stopped session (owner or tenant admin); recomputes the gem ledger | Auth required | `200` |
 | `POST /work-sessions/{workSessionId}/pause` | pauseWorkSession | Auth required | `200` |
 | `POST /work-sessions/{workSessionId}/resume` | resumeWorkSession | Auth required | `200` |
-| `POST /work-sessions/{workSessionId}/stop` | Stop and close the session; optionally attach a final note | Auth required | `200` |
+| `POST /work-sessions/{workSessionId}/review` | Authoritatively stop timing and move the active session into review | Auth required | `200` |
+| `POST /work-sessions/{workSessionId}/stop` | Finish a session that is awaiting review; optionally attach a final note | Auth required | `200` |
 | `GET /work-sessions` | Paginated session history, for Views (daily/monthly/yearly) and drill-down | Auth required | `200` |
 
 ## Notes
@@ -58,6 +72,7 @@
 |---|---|---|---|
 | `GET /work-sessions/{workSessionId}/notes` | listNotes | Auth required | `200` |
 | `POST /work-sessions/{workSessionId}/notes` | Add an update note while running/paused | Auth required | `201` |
+| `PATCH /notes/{noteId}` | Correct a saved note as the session owner or a tenant session manager | Auth required | `200` |
 
 ## Reports
 
@@ -65,12 +80,33 @@
 |---|---|---|---|
 | `GET /reports/time-summary` | Daily/monthly/yearly time-by-project rollup, individual or team scope | Auth required | `200` |
 
+## Gems
+
+| Endpoint | Description | Auth | Success |
+|---|---|---|---|
+| `GET /gem-balances` | Current user's Gem Bank — totals and carry progress by project | Auth required | `200` |
+
 ## AgentReports
 
 | Endpoint | Description | Auth | Success |
 |---|---|---|---|
 | `GET /agent-reports` | In-app feed of agent-generated reports for the active tenant | Auth required | `200` |
 | `GET /agent-reports/{agentReportId}` | getAgentReport | Auth required | `200` |
+
+## Goals
+
+| Endpoint | Description | Auth | Success |
+|---|---|---|---|
+| `GET /goals` | Goals for the active tenant, any status | Auth required | `200` |
+| `POST /goals` | Author a goal directly for project planning (starts ACTIVE, no approval gate) | Auth required | `201` |
+| `PATCH /goals/{goalId}` | Approve/drop/complete a proposed goal, or edit any goal's planning fields | Auth required | `200` |
+| `POST /projects/{projectId}/goals/import` | Atomically import ACTIVE goals into one project | Auth required | `201` |
+
+## TextAssist
+
+| Endpoint | Description | Auth | Success |
+|---|---|---|---|
+| `POST /text-assist` | createTextAssist | Auth required | `200` |
 
 ## Admin
 

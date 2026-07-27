@@ -42,14 +42,48 @@ Recommended hosts: Vercel, Netlify, Cloudflare Pages.
 
 ## Database
 
-Push schema changes before deploying a new server version:
+Apply reviewed migrations before deploying a new server version:
 
 ```bash
-pnpm db:push   # dev/staging
-# or: pnpm --filter @timegems/db exec prisma migrate deploy   # production, once migrations are adopted
+pnpm db:migrate
 ```
 
-`packages/db/prisma/schema.prisma` currently uses `db push` (no migration history) — fine for the current stage. Switch to `prisma migrate` before this has real production data you can't just re-push over.
+New databases apply the baseline and every later migration automatically.
+
+For a database that was created with `prisma db push` before migration history
+was introduced, first compare the live database with the desired schema:
+
+```bash
+pnpm exec prisma migrate diff \
+  --from-schema-datasource packages/db/prisma/schema.prisma \
+  --to-schema-datamodel packages/db/prisma/schema.prisma \
+  --exit-code
+```
+
+If there is no drift because `db push` already installed the full current
+schema, mark each existing migration as applied:
+
+```bash
+pnpm exec prisma migrate resolve --schema packages/db/prisma/schema.prisma --applied 20260726000100_baseline
+pnpm exec prisma migrate resolve --schema packages/db/prisma/schema.prisma --applied 20260726000200_active_session_guard
+pnpm exec prisma migrate resolve --schema packages/db/prisma/schema.prisma --applied 20260726000300_gem_account_lock
+pnpm db:migrate:status
+```
+
+If the database contains only the pre-hardening schema, mark only the baseline
+as applied and let deploy create the newer tables:
+
+```bash
+pnpm exec prisma migrate resolve --schema packages/db/prisma/schema.prisma --applied 20260726000100_baseline
+pnpm db:migrate
+```
+
+The active-session migration intentionally fails if existing data has more
+than one `RUNNING`/`PAUSED` session for a user. Repair that invariant before
+retrying; the migration never silently chooses which session to preserve.
+
+Use `pnpm db:push` only for disposable local prototyping. Production and shared
+environments must use migration history.
 
 ## Multi-tenant note
 

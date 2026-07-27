@@ -13,8 +13,93 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Sign in or register with Google (the only auth method in V1) */
+        /** Sign in or register with Google */
         post: operations["googleAuth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/anonymous": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create an instant guest account (auto-assigned name, personal tenant) -- no request body */
+        post: operations["anonymousAuth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register with email + password */
+        post: operations["registerWithEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign in with email + password */
+        post: operations["loginWithEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add email + password to the current (e.g. anonymous) user in place -- never creates a second account */
+        post: operations["claimWithEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/claim/google": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Link a Google identity to the current (e.g. anonymous) user in place -- never creates a second account */
+        post: operations["claimWithGoogle"];
         delete?: never;
         options?: never;
         head?: never;
@@ -153,6 +238,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search members of the active tenant for team management */
+        get: operations["listTenantMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Tenant-scoped -- the requester and the target user must share a tenant (same check TeamService.addMember already uses), so this can't be used to look up an arbitrary user platform-wide. */
+        get: operations["getUser"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects": {
         parameters: {
             query?: never;
@@ -228,10 +347,11 @@ export interface paths {
         get: operations["getWorkSession"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete a stopped session (owner or tenant admin); recomputes the gem ledger */
+        delete: operations["deleteWorkSession"];
         options?: never;
         head?: never;
-        /** Change the project tagged to an in-progress session */
+        /** Correct a session's duration, project, or goal; stopped-session corrections recompute gem ledgers */
         patch: operations["updateWorkSession"];
         trace?: never;
     };
@@ -267,6 +387,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/work-sessions/{workSessionId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Authoritatively stop timing and move the active session into review */
+        post: operations["reviewWorkSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/work-sessions/{workSessionId}/stop": {
         parameters: {
             query?: never;
@@ -276,7 +413,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Stop and close the session; optionally attach a final note */
+        /** Finish a session that is awaiting review; optionally attach a final note */
         post: operations["stopWorkSession"];
         delete?: never;
         options?: never;
@@ -318,6 +455,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notes/{noteId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Correct a saved note as the session owner or a tenant session manager */
+        patch: operations["updateNote"];
+        trace?: never;
+    };
     "/reports/time-summary": {
         parameters: {
             query?: never;
@@ -327,6 +481,23 @@ export interface paths {
         };
         /** Daily/monthly/yearly time-by-project rollup, individual or team scope */
         get: operations["getTimeSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gem-balances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current user's Gem Bank — totals and carry progress by project */
+        get: operations["listGemBalances"];
         put?: never;
         post?: never;
         delete?: never;
@@ -362,6 +533,75 @@ export interface paths {
         get: operations["getAgentReport"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/goals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Goals for the active tenant, any status */
+        get: operations["listGoals"];
+        put?: never;
+        /** Author a goal directly for project planning (starts ACTIVE, no approval gate) */
+        post: operations["createGoal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/goals/{goalId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Approve/drop/complete a proposed goal, or edit any goal's planning fields */
+        patch: operations["updateGoal"];
+        trace?: never;
+    };
+    "/projects/{projectId}/goals/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Atomically import ACTIVE goals into one project */
+        post: operations["importProjectGoals"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/text-assist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Heuristic (not a real LLM call yet) -- same documented-placeholder pattern as AgentEmployeeService, so a real model call can replace the transform logic later without changing this contract. */
+        post: operations["createTextAssist"];
         delete?: never;
         options?: never;
         head?: never;
@@ -478,35 +718,86 @@ export interface components {
             error: string;
             code?: string;
         };
+        /** @enum {string} */
+        TenantPlan: "FREE" | "TEAM" | "ENTERPRISE";
+        /** @enum {string} */
+        TenantRole: "OWNER" | "ADMIN" | "MEMBER";
+        /** @enum {string} */
+        Capability: "team:manage" | "project:manage" | "session:manage" | "site:admin";
+        /** @enum {string} */
+        WorkSessionIntervalKind: "ACTIVE" | "PAUSED";
+        /** @enum {string} */
+        WorkSessionStatus: "RUNNING" | "PAUSED" | "REVIEWING" | "STOPPED";
+        /** @enum {string} */
+        ReportPeriod: "day" | "week" | "month" | "year";
+        /** @enum {string} */
+        ReportScope: "individual" | "team";
+        /** @enum {string} */
+        AgentReportType: "SUMMARY" | "REVIEW" | "PROPOSAL" | "GOAL";
+        /** @enum {string} */
+        AgentReportChannel: "feed" | "discord" | "github" | "doc";
+        /** @enum {string} */
+        AgentEmployeeKind: "SUMMARIZER" | "QA" | "PM" | "CODE_REVIEW" | "STEERING" | "CUSTOM";
+        /** @enum {string} */
+        GoalStatus: "PROPOSED" | "ACTIVE" | "DONE" | "DROPPED";
+        /** @enum {string} */
+        TextAssistMode: "enhance" | "summarize";
         User: {
             id: string;
-            email: string;
+            email?: string | null;
             name: string;
             avatarUrl?: string | null;
+            /** @description True until any credential (password or Google) is added via /auth/claim or /auth/claim/google. */
+            isAnonymous: boolean;
             /** Format: date-time */
             suspendedAt?: string | null;
             /** Format: date-time */
             createdAt: string;
         };
+        TenantMember: components["schemas"]["User"] & {
+            tenantRole: components["schemas"]["TenantRole"];
+        };
         AuthResponse: {
             data: components["schemas"]["User"];
+        };
+        CurrentUserContext: {
+            user: components["schemas"]["User"];
+            tenant: components["schemas"]["TenantSummary"] | null;
+            capabilities: components["schemas"]["Capability"][];
+        };
+        CurrentUserResponse: {
+            data: components["schemas"]["CurrentUserContext"];
         };
         GoogleAuthInput: {
             /** @description Google ID token from the Sign-In button callback */
             credential: string;
         };
+        RegisterInput: {
+            /** Format: email */
+            email: string;
+            password: string;
+            name?: string;
+        };
+        LoginInput: {
+            /** Format: email */
+            email: string;
+            password: string;
+        };
+        ClaimEmailInput: {
+            /** Format: email */
+            email: string;
+            password: string;
+        };
         Tenant: {
             id: string;
             name: string;
             slug: string;
-            /** @enum {string} */
-            plan: "FREE" | "TEAM" | "ENTERPRISE";
+            plan: components["schemas"]["TenantPlan"];
             /** Format: date-time */
             createdAt: string;
         };
         TenantSummary: components["schemas"]["Tenant"] & {
-            /** @enum {string} */
-            role: "OWNER" | "ADMIN" | "MEMBER";
+            role: components["schemas"]["TenantRole"];
         };
         CreateTenantInput: {
             name: string;
@@ -525,8 +816,30 @@ export interface components {
         UpdateTeamInput: {
             name?: string;
         };
-        AddTeamMemberInput: {
-            userId: string;
+        AddTeamMembersInput: {
+            userIds: string[];
+        };
+        GemType: {
+            id: string;
+            projectId: string;
+            name: string;
+            icon: string;
+            color: string;
+            description?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreateGemTypeInput: {
+            name: string;
+            icon: string;
+            color: string;
+            description?: string;
+        };
+        UpdateGemTypeInput: {
+            name?: string;
+            icon?: string;
+            color?: string;
+            description?: string | null;
         };
         Project: {
             id: string;
@@ -538,17 +851,20 @@ export interface components {
             archivedAt?: string | null;
             /** Format: date-time */
             createdAt: string;
+            gemType?: components["schemas"]["GemType"] | null;
         };
         CreateProjectInput: {
             name: string;
             teamId?: string | null;
             color?: string | null;
+            gemType?: components["schemas"]["CreateGemTypeInput"];
         };
         UpdateProjectInput: {
             name?: string;
             teamId?: string | null;
             color?: string | null;
             archived?: boolean;
+            gemType?: components["schemas"]["UpdateGemTypeInput"];
         };
         Note: {
             id: string;
@@ -558,15 +874,19 @@ export interface components {
             isStopSummary: boolean;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
             author?: components["schemas"]["User"];
         };
         CreateNoteInput: {
             body: string;
         };
+        UpdateNoteInput: {
+            body: string;
+        };
         WorkSessionInterval: {
             id: string;
-            /** @enum {string} */
-            kind: "ACTIVE" | "PAUSED";
+            kind: components["schemas"]["WorkSessionIntervalKind"];
             /** Format: date-time */
             startedAt: string;
             /** Format: date-time */
@@ -577,27 +897,44 @@ export interface components {
             tenantId: string;
             userId: string;
             projectId?: string | null;
-            /** @enum {string} */
-            status: "RUNNING" | "PAUSED" | "STOPPED";
+            goalId?: string | null;
+            status: components["schemas"]["WorkSessionStatus"];
             /** Format: date-time */
             startedAt: string;
             /** Format: date-time */
             stoppedAt?: string | null;
             activeDurationSec: number;
             /** Format: date-time */
+            correctedAt?: string | null;
+            /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
             project?: components["schemas"]["Project"] | null;
+            goal?: components["schemas"]["Goal"] | null;
             user?: components["schemas"]["User"];
         };
         WorkSessionDetail: components["schemas"]["WorkSession"] & {
             notes?: components["schemas"]["Note"][];
             intervals?: components["schemas"]["WorkSessionInterval"][];
+            /** @description Gems committed to the ledger for this session. Null until STOPPED, or if the project has no gem type. */
+            gemsAwarded?: number | null;
+        };
+        WorkSessionHistoryItem: components["schemas"]["WorkSession"] & {
+            notes: components["schemas"]["Note"][];
+            /** @description Gems committed to the ledger for this session. Null until STOPPED, or if the project has no gem type. */
+            gemsAwarded: number | null;
         };
         StartWorkSessionInput: {
             projectId?: string | null;
+            goalId?: string | null;
         };
         UpdateWorkSessionInput: {
             projectId?: string | null;
+            /** @description If the goal has a projectId, the session's own projectId must match it. */
+            goalId?: string | null;
+            /** @description Manual correction of a STOPPED session's duration. Triggers a full gem-ledger recompute for this user+project. */
+            activeDurationSec?: number;
         };
         StopWorkSessionInput: {
             note?: string;
@@ -607,17 +944,29 @@ export interface components {
             projectName: string | null;
             userId?: string;
             durationSec: number;
+            /** @description Aggregate only — never render as a per-member ranking (see functional-design.md). */
+            gemsEarned: number;
         };
         TimeSummary: {
-            /** @enum {string} */
-            period: "day" | "month" | "year";
+            period: components["schemas"]["ReportPeriod"];
             /** Format: date */
             date: string;
-            /** @enum {string} */
-            scope: "individual" | "team";
+            scope: components["schemas"]["ReportScope"];
             teamId?: string | null;
             totalDurationSec: number;
+            totalGemsEarned: number;
+            sessionCount: number;
+            projectsWorked: number;
+            goalsAdvanced: number;
             entries: components["schemas"]["TimeSummaryEntry"][];
+        };
+        GemBalance: {
+            projectId: string;
+            projectName: string;
+            gemType: components["schemas"]["GemType"];
+            totalGems: number;
+            /** @description Seconds of active work already banked toward this project's next gem. */
+            carrySec: number;
         };
         AgentReport: {
             id: string;
@@ -625,13 +974,11 @@ export interface components {
             tenantId: string;
             teamId?: string | null;
             projectId?: string | null;
-            /** @enum {string} */
-            type: "SUMMARY" | "REVIEW" | "PROPOSAL" | "GOAL";
+            type: components["schemas"]["AgentReportType"];
             title: string;
             body: string;
             postedTo?: {
-                /** @enum {string} */
-                channel?: "feed" | "discord" | "github" | "doc";
+                channel?: components["schemas"]["AgentReportChannel"];
                 ref?: string | null;
             }[];
             /** Format: date-time */
@@ -640,17 +987,66 @@ export interface components {
         AgentEmployee: {
             id: string;
             tenantId: string;
-            /** @enum {string} */
-            kind: "SUMMARIZER" | "QA" | "PM" | "CODE_REVIEW" | "STEERING" | "CUSTOM";
+            kind: components["schemas"]["AgentEmployeeKind"];
             name: string;
             enabled: boolean;
             schedule: string;
             /** Format: date-time */
+            lastRunAt?: string | null;
+            /** Format: date-time */
             createdAt: string;
         };
+        Goal: {
+            id: string;
+            tenantId: string;
+            teamId?: string | null;
+            projectId?: string | null;
+            createdByUserId?: string | null;
+            title: string;
+            description: string;
+            status: components["schemas"]["GoalStatus"];
+            progressPercent: number;
+            /** @description Relative sizing, 1 (trivial) to 5 (very complex) -- not a time estimate on its own. */
+            complexityScore: number;
+            estimatedHours?: number | null;
+            /** @description Live aggregate of activeDurationSec across all STOPPED WorkSessions tagged with this goal -- computed on read, never stored. */
+            loggedSec?: number;
+            sourceAgentReportId?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreateGoalInput: {
+            title: string;
+            description: string;
+            teamId?: string | null;
+            projectId?: string | null;
+            complexityScore?: number;
+            estimatedHours?: number | null;
+        };
+        ProjectGoalImportRow: {
+            title: string;
+            description: string;
+            complexityScore?: number;
+            estimatedHours?: number | null;
+        };
+        ImportProjectGoalsInput: {
+            goals: components["schemas"]["ProjectGoalImportRow"][];
+        };
+        UpdateGoalInput: {
+            title?: string;
+            description?: string;
+            projectId?: string | null;
+            status?: components["schemas"]["GoalStatus"];
+            progressPercent?: number;
+            complexityScore?: number;
+            estimatedHours?: number | null;
+        };
+        CreateTextAssistInput: {
+            text: string;
+            mode: components["schemas"]["TextAssistMode"];
+        };
         AdminUpdateTenantInput: {
-            /** @enum {string} */
-            plan?: "FREE" | "TEAM" | "ENTERPRISE";
+            plan?: components["schemas"]["TenantPlan"];
             suspended?: boolean;
         };
         AdminUpdateUserInput: {
@@ -712,6 +1108,226 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Account suspended */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Google sign-in is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    anonymousAuth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Guest session created -- session token delivered via Set-Cookie (httpOnly) */
+            201: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Too many guest accounts created from this IP recently */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    registerWithEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterInput"];
+            };
+        };
+        responses: {
+            /** @description Registered -- session token delivered via Set-Cookie (httpOnly) */
+            201: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Invalid email or password too short */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description An account with this email already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    loginWithEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginInput"];
+            };
+        };
+        responses: {
+            /** @description Authenticated -- session token delivered via Set-Cookie (httpOnly) */
+            200: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Invalid email or password */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Account suspended */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    claimWithEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimEmailInput"];
+            };
+        };
+        responses: {
+            /** @description Account updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Invalid email or password too short */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description An account with this email already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    claimWithGoogle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleAuthInput"];
+            };
+        };
+        responses: {
+            /** @description Account updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Invalid Google credential */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description This Google account is already linked to a different user */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     logout: {
@@ -746,13 +1362,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Current user */
+            /** @description Current user, active tenant, and server-derived capabilities */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthResponse"];
+                    "application/json": components["schemas"]["CurrentUserResponse"];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -948,6 +1564,7 @@ export interface operations {
                 /** @description Opaque cursor returned by the previous page. */
                 cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];
+                q?: components["parameters"]["SearchQuery"];
             };
             header?: never;
             path: {
@@ -964,7 +1581,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["User"][];
+                        data: components["schemas"]["TenantMember"][];
                         meta: components["schemas"]["PaginatedMeta"];
                     };
                 };
@@ -983,18 +1600,18 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AddTeamMemberInput"];
+                "application/json": components["schemas"]["AddTeamMembersInput"];
             };
         };
         responses: {
-            /** @description Member added */
+            /** @description Members added */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        data?: components["schemas"]["User"];
+                        data?: components["schemas"]["TenantMember"][];
                     };
                 };
             };
@@ -1027,6 +1644,62 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    listTenantMembers: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor returned by the previous page. */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+                q?: components["parameters"]["SearchQuery"];
+                /** @description Exclude users who already belong to this tenant-scoped team. */
+                excludeTeamId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated tenant members */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TenantMember"][];
+                        meta: components["schemas"]["PaginatedMeta"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["User"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     listProjects: {
         parameters: {
             query?: {
@@ -1035,6 +1708,7 @@ export interface operations {
                 limit?: components["parameters"]["Limit"];
                 q?: components["parameters"]["SearchQuery"];
                 teamId?: string;
+                status?: components["schemas"]["WorkSessionStatus"];
                 archived?: boolean;
             };
             header?: never;
@@ -1222,6 +1896,31 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    deleteWorkSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workSessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Work session deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: null;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     updateWorkSession: {
         parameters: {
             query?: never;
@@ -1301,6 +2000,31 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    reviewWorkSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workSessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Work session is awaiting final review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["WorkSessionDetail"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     stopWorkSession: {
         parameters: {
             query?: never;
@@ -1338,6 +2062,7 @@ export interface operations {
                 limit?: components["parameters"]["Limit"];
                 userId?: string;
                 projectId?: string;
+                goalId?: string;
                 teamId?: string;
                 from?: string;
                 to?: string;
@@ -1355,7 +2080,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["WorkSession"][];
+                        data: components["schemas"]["WorkSessionHistoryItem"][];
                         meta: components["schemas"]["PaginatedMeta"];
                     };
                 };
@@ -1422,15 +2147,48 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    updateNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                noteId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNoteInput"];
+            };
+        };
+        responses: {
+            /** @description Note corrected */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["Note"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     getTimeSummary: {
         parameters: {
             query: {
-                period: "day" | "month" | "year";
+                period: components["schemas"]["ReportPeriod"];
                 /** @description Any date within the target period */
                 date: string;
-                scope: "individual" | "team";
+                scope: components["schemas"]["ReportScope"];
                 /** @description Required when scope=team */
                 teamId?: string;
+                /** @description Exact inclusive period boundary, supplied with `to` for the viewer's local timezone. */
+                from?: string;
+                /** @description Exact exclusive period boundary, supplied with `from` for the viewer's local timezone. */
+                to?: string;
             };
             header?: never;
             path?: never;
@@ -1452,6 +2210,29 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    listGemBalances: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Gem balances */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GemBalance"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     listAgentReports: {
         parameters: {
             query?: {
@@ -1460,7 +2241,7 @@ export interface operations {
                 limit?: components["parameters"]["Limit"];
                 teamId?: string;
                 projectId?: string;
-                type?: "SUMMARY" | "REVIEW" | "PROPOSAL" | "GOAL";
+                type?: components["schemas"]["AgentReportType"];
             };
             header?: never;
             path?: never;
@@ -1502,6 +2283,161 @@ export interface operations {
                 content: {
                     "application/json": {
                         data?: components["schemas"]["AgentReport"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listGoals: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor returned by the previous page. */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+                status?: components["schemas"]["GoalStatus"];
+                projectId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated goals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Goal"][];
+                        meta: components["schemas"]["PaginatedMeta"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createGoal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGoalInput"];
+            };
+        };
+        responses: {
+            /** @description Goal created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["Goal"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateGoal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateGoalInput"];
+            };
+        };
+        responses: {
+            /** @description Goal updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["Goal"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    importProjectGoals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportProjectGoalsInput"];
+            };
+        };
+        responses: {
+            /** @description Goals imported */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            imported: number;
+                        };
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Project not found in the active tenant */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    createTextAssist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTextAssistInput"];
+            };
+        };
+        responses: {
+            /** @description Transformed text */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            result: string;
+                        };
                     };
                 };
             };

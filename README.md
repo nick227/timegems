@@ -7,7 +7,7 @@ See `docs/` for the system requirements, data model, functional design, and road
 ## Setup
 
 1. Copy env: `cp .env.example .env` and fill in `DATABASE_URL` and Google OAuth `GOOGLE_CLIENT_ID`
-2. Run bootstrap: `pnpm bootstrap` — installs deps, pushes schema, generates SDK + pages + tests, seeds data
+2. Run bootstrap: `pnpm bootstrap` — installs deps, applies migrations, generates SDK + pages + tests, seeds data
 
 ## Dev
 
@@ -22,7 +22,7 @@ API: http://localhost:3001
 
 | Command | Description |
 |---|---|
-| `pnpm bootstrap` | First-run: install, push schema, generate everything, seed |
+| `pnpm bootstrap` | First-run: install, migrate, generate everything, seed |
 | `pnpm dev` | Run all apps in dev mode |
 | `pnpm sdk:generate` | Regenerate types from OpenAPI spec |
 | `pnpm sdk:check` | Fail if committed types.ts has drifted from spec |
@@ -32,6 +32,7 @@ API: http://localhost:3001
 | `pnpm typecheck` | TypeScript check all packages |
 | `pnpm lint` | Lint all packages |
 | `pnpm test` | Run all tests |
-| `pnpm db:push` | Push Prisma schema to DB |
+| `pnpm db:migrate` | Apply reviewed Prisma migrations |
+| `pnpm db:push` | Push schema to a disposable local DB |
 | `pnpm db:seed` | Seed development data |
 | `pnpm db:studio` | Open Prisma Studio |

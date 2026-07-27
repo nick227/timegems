@@ -35,21 +35,31 @@ async function main() {
   const project = await db.project.upsert({
     where: { id: 'seed-project-website' },
     update: {},
-    create: { id: 'seed-project-website', tenantId: tenant.id, name: 'Website Redesign', color: '#6366f1' },
+    create: {
+      id: 'seed-project-website',
+      tenantId: tenant.id,
+      name: 'Website Redesign',
+      color: '#6366f1',
+      gemType: { create: { name: 'Ruby', icon: '💎', color: '#ef4444', description: 'Frontend work' } },
+    },
   })
 
-  const agentEmployees: { id: string; kind: 'SUMMARIZER' | 'QA' | 'PM' | 'CODE_REVIEW' | 'STEERING'; name: string }[] = [
-    { id: 'seed-agent-summarizer', kind: 'SUMMARIZER', name: 'Summarizer' },
-    { id: 'seed-agent-qa', kind: 'QA', name: 'QA' },
-    { id: 'seed-agent-pm', kind: 'PM', name: 'PM' },
-    { id: 'seed-agent-code-review', kind: 'CODE_REVIEW', name: 'Code Review' },
-    { id: 'seed-agent-steering', kind: 'STEERING', name: 'Steering' },
+  // Mix of trigger styles, demonstrating both scheduling paths (see
+  // apps/server/src/scheduler.ts and AgentEmployeeService.runOnChangeForTenant):
+  // on_change fires from WorkSessionService.stop(); every:<n><unit> is swept
+  // by the interval scheduler every 60s.
+  const agentEmployees: { id: string; kind: 'SUMMARIZER' | 'QA' | 'PM' | 'CODE_REVIEW' | 'STEERING'; name: string; schedule: string }[] = [
+    { id: 'seed-agent-summarizer', kind: 'SUMMARIZER', name: 'Summarizer', schedule: 'on_change' },
+    { id: 'seed-agent-qa', kind: 'QA', name: 'QA', schedule: 'on_change' },
+    { id: 'seed-agent-code-review', kind: 'CODE_REVIEW', name: 'Code Review', schedule: 'on_change' },
+    { id: 'seed-agent-pm', kind: 'PM', name: 'PM', schedule: 'every:24h' },
+    { id: 'seed-agent-steering', kind: 'STEERING', name: 'Steering', schedule: 'every:168h' },
   ]
   for (const employee of agentEmployees) {
     await db.agentEmployee.upsert({
       where: { id: employee.id },
       update: {},
-      create: { ...employee, tenantId: tenant.id, schedule: 'on_change' },
+      create: { ...employee, tenantId: tenant.id },
     })
   }
 

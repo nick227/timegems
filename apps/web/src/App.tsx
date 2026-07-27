@@ -1,22 +1,37 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { Login } from '@/pages/Login'
-import { WorkPage } from '@/pages/WorkPage'
-import { ProjectsPage } from '@/pages/ProjectsPage'
-import { ProjectPage } from '@/pages/ProjectPage'
-import { TeamsPage } from '@/pages/TeamsPage'
-import { TeamPage } from '@/pages/TeamPage'
-import { ViewsPage } from '@/pages/ViewsPage'
-import { AgentReportsPage } from '@/pages/AgentReportsPage'
-import { AgentReportPage } from '@/pages/AgentReportPage'
-import { IntegrationsPage } from '@/pages/IntegrationsPage'
-import { SettingsPage } from '@/pages/SettingsPage'
-import { AdminPage } from '@/pages/AdminPage'
+import { lazy, Suspense } from 'react'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { LoginRoute } from '@/features/auth'
+import { WorkSessionsRoute } from '@/features/work-sessions'
 import { AuthGuard } from '@/lib/AuthGuard'
+import { CapabilityGuard } from '@/lib/CapabilityGuard'
 import { PageErrorBoundary } from '@/lib/PageErrorBoundary'
 import { Shell } from '@/components/layout/Shell'
+import { PageSpinner } from '@/components/ui/Spinner'
+
+const ProjectsRoute = lazy(() => import('@/features/projects').then((module) => ({ default: module.ProjectsRoute })))
+const ProjectRoute = lazy(() => import('@/features/projects').then((module) => ({ default: module.ProjectRoute })))
+const TeamsRoute = lazy(() => import('@/features/teams').then((module) => ({ default: module.TeamsRoute })))
+const TeamRoute = lazy(() => import('@/features/teams').then((module) => ({ default: module.TeamRoute })))
+const UserRoute = lazy(() => import('@/features/users').then((module) => ({ default: module.UserRoute })))
+const ViewsRoute = lazy(() => import('@/features/views').then((module) => ({ default: module.ViewsRoute })))
+const ReportsRoute = lazy(() => import('@/features/reports').then((module) => ({ default: module.ReportsRoute })))
+const ReportRoute = lazy(() => import('@/features/reports').then((module) => ({ default: module.ReportRoute })))
+const GoalsRoute = lazy(() => import('@/features/goals').then((module) => ({ default: module.GoalsRoute })))
+const IntegrationsRoute = lazy(() =>
+  import('@/features/integrations').then((module) => ({ default: module.IntegrationsRoute })),
+)
+const SettingsRoute = lazy(() => import('@/features/account').then((module) => ({ default: module.SettingsRoute })))
+const AdminRoute = lazy(() => import('@/features/admin').then((module) => ({ default: module.AdminRoute })))
+const NotFoundRoute = lazy(() =>
+  import('@/features/not-found').then((module) => ({ default: module.NotFoundRoute })),
+)
 
 function withBoundary(element: React.ReactNode) {
-  return <PageErrorBoundary>{element}</PageErrorBoundary>
+  return (
+    <PageErrorBoundary>
+      <Suspense fallback={<PageSpinner />}>{element}</Suspense>
+    </PageErrorBoundary>
+  )
 }
 
 export function App() {
@@ -24,26 +39,29 @@ export function App() {
     <BrowserRouter>
       <Routes>
         {/* Public */}
-        <Route path="/login" element={withBoundary(<Login />)} />
+        <Route path="/login" element={withBoundary(<LoginRoute />)} />
 
         {/* Protected — everything except Work itself lives behind the hamburger menu */}
         <Route element={<AuthGuard />}>
           <Route element={<Shell />}>
-            <Route index element={withBoundary(<WorkPage />)} />
-            <Route path="/projects" element={withBoundary(<ProjectsPage />)} />
-            <Route path="/projects/:projectId" element={withBoundary(<ProjectPage />)} />
-            <Route path="/teams" element={withBoundary(<TeamsPage />)} />
-            <Route path="/teams/:teamId" element={withBoundary(<TeamPage />)} />
-            <Route path="/views" element={withBoundary(<ViewsPage />)} />
-            <Route path="/reports" element={withBoundary(<AgentReportsPage />)} />
-            <Route path="/reports/:agentReportId" element={withBoundary(<AgentReportPage />)} />
-            <Route path="/integrations" element={withBoundary(<IntegrationsPage />)} />
-            <Route path="/settings" element={withBoundary(<SettingsPage />)} />
-            <Route path="/admin" element={withBoundary(<AdminPage />)} />
+            <Route index element={withBoundary(<WorkSessionsRoute />)} />
+            <Route path="/projects" element={withBoundary(<ProjectsRoute />)} />
+            <Route path="/projects/:projectId" element={withBoundary(<ProjectRoute />)} />
+            <Route path="/teams" element={withBoundary(<TeamsRoute />)} />
+            <Route path="/teams/:teamId" element={withBoundary(<TeamRoute />)} />
+            <Route path="/users/:userId" element={withBoundary(<UserRoute />)} />
+            <Route path="/views" element={withBoundary(<ViewsRoute />)} />
+            <Route path="/reports" element={withBoundary(<ReportsRoute />)} />
+            <Route path="/reports/:agentReportId" element={withBoundary(<ReportRoute />)} />
+            <Route path="/goals" element={withBoundary(<GoalsRoute />)} />
+            <Route path="/integrations" element={withBoundary(<IntegrationsRoute />)} />
+            <Route path="/settings" element={withBoundary(<SettingsRoute />)} />
+            <Route element={<CapabilityGuard capability="site:admin" />}>
+              <Route path="/admin" element={withBoundary(<AdminRoute />)} />
+            </Route>
+            <Route path="*" element={withBoundary(<NotFoundRoute />)} />
           </Route>
         </Route>
-
-        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   )
