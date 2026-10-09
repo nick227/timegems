@@ -12,4 +12,9 @@ export default defineConfig({
   server: {
     port: 5173,
   },
+  // `pnpm --filter web start` serves the production build on Railway via
+  // `vite preview`, which rejects unknown Host headers by default.
+  preview: {
+    allowedHosts: ['.up.railway.app'],
+  },
 })
